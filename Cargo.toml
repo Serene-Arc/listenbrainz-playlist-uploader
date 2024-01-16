@@ -6,3 +6,14 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+anyhow = "1.0.79"
+audiotags = "0.4.1"
+clap = { version = "4.4.14", features = ["derive"] }
+clap-verbosity-flag = "2.1.1"
+config = "0.13.4"
+env_logger = "0.10.1"
+log = "0.4.20"
+m3u = "1.0.0"
+reqwest = { version = "0.11.23", features = ["blocking", "json"] }
+serde_json = { version = "1.0.111", features = [] }
+url = "2.5.0"
