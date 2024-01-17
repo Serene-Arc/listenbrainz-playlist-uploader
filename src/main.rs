@@ -1,15 +1,12 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Error, Result};
 use audiotags::Tag;
 use clap::{Parser, ValueEnum};
 use clap_verbosity_flag::{InfoLevel, Verbosity};
 use config::Config;
 use futures::stream::FuturesUnordered;
-use futures::{future, FutureExt, StreamExt};
-use governor::clock::DefaultClock;
-use governor::state::{InMemoryState, NotKeyed};
+use futures::{FutureExt, StreamExt};
 use governor::{Quota, RateLimiter};
-use indicatif::{MultiProgress, ProgressBar, ProgressIterator};
-use indicatif_log_bridge::LogWrapper;
+use indicatif::ProgressBar;
 use log::{error, info};
 use m3u::Entry;
 use num_traits::ToPrimitive;
@@ -61,12 +58,9 @@ async fn main() {
     let args = Args::parse();
 
     let verbosity = args.verbose;
-    let logger = env_logger::Builder::new()
+    env_logger::Builder::new()
         .filter_level(verbosity.log_level_filter())
-        .build();
-    let multi = MultiProgress::new();
-
-    LogWrapper::new(multi, logger).try_init().unwrap();
+        .init();
 
     let settings = Config::builder()
         .add_source(config::File::from(args.config))
@@ -114,12 +108,8 @@ async fn main() {
         }
     }
 
-    // Be a good internet citizen; this isn't an important application.
-    let rate_limiter = Arc::new(RateLimiter::direct(
-        Quota::with_period(Duration::from_secs(5)).expect("Could not create quota"),
-    ));
-
-    let musicbrainz_ids = resolve_all_songs_for_mbids(song_data, &rate_limiter).await;
+    info!("Resolving song tags to Musicbrainz IDs...");
+    let musicbrainz_ids = resolve_all_songs_for_mbids(song_data).await;
 
     let number_of_resolved_songs = musicbrainz_ids.len();
     let percentage = calculate_percentage(number_of_resolved_songs, number_of_tagged_songs)
@@ -129,23 +119,65 @@ async fn main() {
         number_of_resolved_songs, number_of_tagged_songs, percentage,
     );
 
-    // match submit_playlist(&token, &musicbrainz_ids, args.playlist_name, args.public).await {
-    //     Ok(r) => {
-    //         info!("Playlist created with ID {}", r.playlist_mbid)
-    //     }
-    //     Err(e) => {
-    //         error!("Uh oh: {}", e)
-    //     }
-    // }
-    // if args.feedback.is_some() {
-    //     info!("Sending feedback for songs in playlist...")
-    // }
+    match submit_playlist(&token, &musicbrainz_ids, args.playlist_name, args.public).await {
+        Ok(r) => {
+            info!("Playlist created with ID {}", r.playlist_mbid)
+        }
+        Err(e) => {
+            error!("Could not create playlist: {}", e)
+        }
+    }
+    match args.feedback {
+        None => {}
+        Some(f) => {
+            info!("Sending feedback for songs in playlist...");
+            give_feedback_on_all_songs(&musicbrainz_ids, &token, f).await
+        }
+    }
 }
 
-async fn resolve_all_songs_for_mbids(
-    song_data: Vec<AudioFileData>,
-    rate_limiter: &Arc<RateLimiter<NotKeyed, InMemoryState, DefaultClock>>,
-) -> Vec<String> {
+async fn give_feedback_on_all_songs(
+    musicbrainz_ids: &Vec<String>,
+    user_token: &String,
+    feedback: Feedback,
+) {
+    // Be a good internet citizen; this isn't an important application.
+    let rate_limiter = Arc::new(RateLimiter::direct(
+        Quota::with_period(Duration::from_secs(5)).expect("Could not create quota"),
+    ));
+
+    let progress_bar = Arc::new(ProgressBar::new(musicbrainz_ids.len() as u64));
+    let futures: FuturesUnordered<_> = musicbrainz_ids
+        .into_iter()
+        .map(|mbid| {
+            let limiter = Arc::clone(&rate_limiter);
+            let pb = Arc::clone(&progress_bar);
+            async move {
+                limiter.until_ready().await;
+                let out = give_song_feedback_for_mbid(user_token, mbid, feedback).await;
+                pb.inc(1);
+                out
+            }
+            .boxed()
+        })
+        .collect();
+
+    let results: Vec<Result<()>> = futures.collect().await;
+    for result in results {
+        match result {
+            Ok(_) => {}
+            Err(e) => {
+                error!("Could not give feedback on song: {}", e)
+            }
+        }
+    }
+}
+async fn resolve_all_songs_for_mbids(song_data: Vec<AudioFileData>) -> Vec<String> {
+    // Be a good internet citizen; this isn't an important application.
+    let rate_limiter = Arc::new(RateLimiter::direct(
+        Quota::with_period(Duration::from_secs(5)).expect("Could not create quota"),
+    ));
+
     let progress_bar = Arc::new(ProgressBar::new(song_data.len() as u64));
     let futures: FuturesUnordered<_> = song_data
         .into_iter()
@@ -162,18 +194,17 @@ async fn resolve_all_songs_for_mbids(
         })
         .collect();
 
-    let musicbrainz_ids: Vec<String> = futures
-        .filter_map(|result| {
-            future::ready(match result {
-                Ok(val) => Some(val),
-                Err(e) => {
-                    error!("An error occurred while getting MusicBrainz ID: {:?}", e);
-                    None
-                }
-            })
+    let musicbrainz_ids: Vec<Result<String>> = futures.collect().await;
+    let musicbrainz_ids = musicbrainz_ids
+        .into_iter()
+        .filter_map(|result| match result {
+            Ok(s) => Some(s),
+            Err(e) => {
+                error!("Could not resolve song: {}", e);
+                None
+            }
         })
-        .collect()
-        .await;
+        .collect();
     musicbrainz_ids
 }
 
@@ -217,7 +248,7 @@ async fn give_song_feedback_for_mbid(
     user_token: &String,
     mbid: &String,
     feedback: Feedback,
-) -> bool {
+) -> Result<()> {
     let client = reqwest::Client::new();
     let parameters = [
         ("recording_mbid", mbid),
@@ -230,8 +261,8 @@ async fn give_song_feedback_for_mbid(
         .send()
         .await;
     return match response {
-        Ok(r) => r.error_for_status().is_err(),
-        Err(_) => false,
+        Ok(_) => Ok(()),
+        Err(e) => Err(Error::from(e)),
     };
 }
 
