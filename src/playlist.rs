@@ -72,7 +72,7 @@ pub async fn submit_playlist(
     mbid_vec: &Vec<String>,
     playlist_name: String,
     public_playlist: bool,
-) -> anyhow::Result<PlaylistSubmissionResponse> {
+) -> Result<PlaylistSubmissionResponse> {
     let client = reqwest::Client::new();
     let data = SubmissionPlaylist {
         name: playlist_name,
