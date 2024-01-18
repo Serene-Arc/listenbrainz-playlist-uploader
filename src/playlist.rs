@@ -4,17 +4,17 @@ use serde_json::{Map, Value};
 use std::collections::HashMap;
 
 #[derive(Deserialize)]
-pub struct PlaylistResponse {
+pub struct PlaylistSubmissionResponse {
     pub playlist_mbid: String,
 }
 
-struct Playlist<'a> {
+struct SubmissionPlaylist<'a> {
     name: String,
     song_mbids: &'a Vec<String>,
     public: bool,
 }
 
-impl Serialize for Playlist<'_> {
+impl Serialize for SubmissionPlaylist<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -58,9 +58,9 @@ pub async fn submit_playlist(
     mbid_vec: &Vec<String>,
     playlist_name: String,
     public_playlist: bool,
-) -> anyhow::Result<PlaylistResponse> {
+) -> anyhow::Result<PlaylistSubmissionResponse> {
     let client = reqwest::Client::new();
-    let data = Playlist {
+    let data = SubmissionPlaylist {
         name: playlist_name,
         public: public_playlist,
         song_mbids: mbid_vec,
@@ -71,7 +71,7 @@ pub async fn submit_playlist(
         .json(&data)
         .send()
         .await?;
-    let playlist_id = response.json::<PlaylistResponse>().await?;
+    let playlist_id = response.json::<PlaylistSubmissionResponse>().await?;
     Ok(playlist_id)
 }
 
@@ -82,7 +82,7 @@ mod test {
 
     #[test]
     fn test_serialise_playlist_no_tracks() {
-        let test = Playlist {
+        let test = SubmissionPlaylist {
             name: "Example".to_string(),
             song_mbids: &Vec::new(),
             public: false,
@@ -114,7 +114,7 @@ mod test {
 
     #[test]
     fn test_serialise_playlist_one_track() {
-        let test = Playlist {
+        let test = SubmissionPlaylist {
             name: "Example".to_string(),
             song_mbids: &vec!["test".to_string()],
             public: false,
@@ -150,7 +150,7 @@ mod test {
 
     #[test]
     fn test_serialise_playlist_two_tracks() {
-        let test = Playlist {
+        let test = SubmissionPlaylist {
             name: "Example".to_string(),
             song_mbids: &vec!["test1".to_string(), "test2".to_string()],
             public: false,
