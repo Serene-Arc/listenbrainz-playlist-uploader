@@ -111,4 +111,80 @@ mod test {
             ],
         );
     }
+
+    #[test]
+    fn test_serialise_playlist_one_track() {
+        let test = Playlist {
+            name: "Example".to_string(),
+            song_mbids: &vec!["test".to_string()],
+            public: false,
+        };
+        assert_ser_tokens(
+            &test,
+            &[
+                Token::Map { len: Some(1) },
+                Token::Str("playlist"),
+                Token::Map { len: Some(3) },
+                Token::Str("extension"),
+                Token::Map { len: Some(1) },
+                Token::Str("https://musicbrainz.org/doc/jspf#playlist"),
+                Token::Map { len: Some(1) },
+                Token::Str("public"),
+                Token::Bool(false),
+                Token::MapEnd,
+                Token::MapEnd,
+                Token::Str("title"),
+                Token::Str("Example"),
+                Token::Str("track"),
+                Token::Seq { len: Some(1) },
+                Token::Map { len: Some(1) },
+                Token::String("identifier"),
+                Token::String("https://musicbrainz.org/recording/test"),
+                Token::MapEnd,
+                Token::SeqEnd,
+                Token::MapEnd,
+                Token::MapEnd,
+            ],
+        );
+    }
+
+    #[test]
+    fn test_serialise_playlist_two_tracks() {
+        let test = Playlist {
+            name: "Example".to_string(),
+            song_mbids: &vec!["test1".to_string(), "test2".to_string()],
+            public: false,
+        };
+        assert_ser_tokens(
+            &test,
+            &[
+                Token::Map { len: Some(1) },
+                Token::Str("playlist"),
+                Token::Map { len: Some(3) },
+                Token::Str("extension"),
+                Token::Map { len: Some(1) },
+                Token::Str("https://musicbrainz.org/doc/jspf#playlist"),
+                Token::Map { len: Some(1) },
+                Token::Str("public"),
+                Token::Bool(false),
+                Token::MapEnd,
+                Token::MapEnd,
+                Token::Str("title"),
+                Token::Str("Example"),
+                Token::Str("track"),
+                Token::Seq { len: Some(2) },
+                Token::Map { len: Some(1) },
+                Token::String("identifier"),
+                Token::String("https://musicbrainz.org/recording/test1"),
+                Token::MapEnd,
+                Token::Map { len: Some(1) },
+                Token::String("identifier"),
+                Token::String("https://musicbrainz.org/recording/test2"),
+                Token::MapEnd,
+                Token::SeqEnd,
+                Token::MapEnd,
+                Token::MapEnd,
+            ],
+        );
+    }
 }
