@@ -1,5 +1,6 @@
 mod playlist;
 
+use crate::playlist::{get_current_playlists, get_current_user};
 use anyhow::{anyhow, Error, Result};
 use audiotags::Tag;
 use clap::{Parser, ValueEnum};
@@ -9,7 +10,7 @@ use futures::stream::FuturesUnordered;
 use futures::{FutureExt, StreamExt};
 use governor::{Quota, RateLimiter};
 use indicatif::ProgressBar;
-use log::{error, info};
+use log::{debug, error, info};
 use m3u::Entry;
 use num_traits::ToPrimitive;
 use reqwest::header::AUTHORIZATION;
@@ -68,6 +69,25 @@ async fn main() {
         exit(1);
     }
 
+    let token;
+    match settings.get_string("user_token") {
+        Ok(t) => token = t,
+        Err(_) => {
+            error!("Configuration does not contain a token!");
+            exit(1);
+        }
+    }
+
+    debug!("Testing token by resolving to user");
+    let user_name = match get_current_user(&token).await {
+        Ok(s) => s,
+        Err(e) => {
+            error!("Could not resolve token successfully: {}", e);
+            exit(1);
+        }
+    };
+    info!("This token belongs to {}!", &user_name);
+
     let file_path = &args.file;
     let playlist_entries = load_file_paths(file_path);
     let number_of_files = playlist_entries.len();
@@ -95,15 +115,6 @@ async fn main() {
         exit(1);
     }
 
-    let token;
-    match settings.get_string("user_token") {
-        Ok(t) => token = t,
-        Err(_) => {
-            error!("Configuration does not contain a token!");
-            exit(1);
-        }
-    }
-
     info!("Resolving song tags to Musicbrainz IDs...");
     let musicbrainz_ids = resolve_all_songs_for_mbids(song_data).await;
 
@@ -115,6 +126,20 @@ async fn main() {
         number_of_resolved_songs, number_of_tagged_songs, percentage,
     );
 
+    debug!("Retrieving existing playlists");
+    let current_playlists = match get_current_playlists(&token, &user_name).await {
+        Ok(playlists) => playlists,
+        Err(e) => {
+            error!("Could not retrieve existing playlists: {}", e);
+            exit(1)
+        }
+    };
+    info!(
+        "Found {} existing playlists on account",
+        current_playlists.len()
+    );
+
+    debug!("Retrieving existing playlists");
     match playlist::submit_playlist(&token, &musicbrainz_ids, args.playlist_name, args.public).await
     {
         Ok(r) => {

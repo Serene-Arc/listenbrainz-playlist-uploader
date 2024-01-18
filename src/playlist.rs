@@ -1,7 +1,9 @@
+use anyhow::{anyhow, Result};
 use reqwest::header::AUTHORIZATION;
 use serde::{Deserialize, Serialize, Serializer};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
+use url::Url;
 
 #[derive(Deserialize)]
 pub struct PlaylistSubmissionResponse {
@@ -12,6 +14,18 @@ struct SubmissionPlaylist<'a> {
     name: String,
     song_mbids: &'a Vec<String>,
     public: bool,
+}
+
+#[derive(Debug, Deserialize)]
+struct ValidationResponse {
+    code: usize,
+    valid: bool,
+    user_name: String,
+}
+
+struct ExistingPlaylistResponse {
+    title: String,
+    playlist_id: String,
 }
 
 impl Serialize for SubmissionPlaylist<'_> {
@@ -73,6 +87,37 @@ pub async fn submit_playlist(
         .await?;
     let playlist_id = response.json::<PlaylistSubmissionResponse>().await?;
     Ok(playlist_id)
+}
+
+pub async fn get_current_user(user_token: &String) -> Result<String> {
+    let client = reqwest::Client::new();
+    let response = client
+        .get("https://api.listenbrainz.org/1/validate-token")
+        .header(AUTHORIZATION, format!("Token {}", user_token))
+        .send()
+        .await?;
+    let test = response.text().await?;
+    let response: ValidationResponse = serde_json::from_str(test.as_str())?;
+    match response.code {
+        200 => return Ok(response.user_name),
+        _ => Err(anyhow!("Response was {}", response.code)),
+    }
+}
+
+pub async fn get_current_playlists(token: &String, user_name: &String) -> Result<Vec<String>> {
+    let url = Url::parse(&*format!(
+        "https://api.listenbrainz.org/1/user/{}/playlists",
+        user_name
+    ))?;
+    let client = reqwest::Client::new();
+    let response = client
+        .get(url)
+        .header(AUTHORIZATION, format!("Token {}", token))
+        .send()
+        .await;
+    let response_text = response?.text().await?;
+    // let playlist_objects: Vec<ExistingPlaylistResponse> =
+    Ok(Vec::new())
 }
 
 #[cfg(test)]
