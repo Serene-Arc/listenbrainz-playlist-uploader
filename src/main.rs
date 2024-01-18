@@ -1,7 +1,9 @@
+mod audio_data;
 mod playlist;
 
 use crate::playlist::{get_current_playlists, get_current_user};
 use anyhow::{anyhow, Error, Result};
+use audio_data::AudioFileData;
 use audiotags::Tag;
 use clap::{Parser, ValueEnum};
 use clap_verbosity_flag::{InfoLevel, Verbosity};
@@ -14,13 +16,12 @@ use log::{debug, error, info};
 use m3u::Entry;
 use num_traits::ToPrimitive;
 use reqwest::header::AUTHORIZATION;
-use serde_json::{json, Value};
+use serde_json::json;
 use std::path::PathBuf;
 use std::process::exit;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio;
-use url::Url;
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -42,12 +43,6 @@ enum Feedback {
     LOVE = 1,
     HATE = -1,
     NEUTRAL = 0,
-}
-
-#[derive(Debug, Eq, PartialEq)]
-struct AudioFileData {
-    artist: String,
-    title: String,
 }
 
 #[tokio::main]
@@ -208,7 +203,7 @@ async fn resolve_all_songs_for_mbids(song_data: Vec<AudioFileData>) -> Vec<Strin
             let pb = Arc::clone(&progress_bar);
             async move {
                 limiter.until_ready().await;
-                let out = get_musicbrainz_id_for_audio_data(data).await;
+                let out = audio_data::get_musicbrainz_id_for_audio_data(data).await;
                 pb.inc(1);
                 out
             }
@@ -285,68 +280,9 @@ async fn give_song_feedback_for_mbid(
     };
 }
 
-async fn get_musicbrainz_id_for_audio_data(audio_file_data: AudioFileData) -> Result<String> {
-    let request_url: Url = Url::parse_with_params(
-        "https://api.listenbrainz.org/1/metadata/lookup/",
-        &[
-            ("artist_name", audio_file_data.artist.clone()),
-            ("recording_name", audio_file_data.title.clone()),
-        ],
-    )?;
-    let result = reqwest::get(request_url)
-        .await?
-        .error_for_status()?
-        .json::<Value>()
-        .await?;
-
-    if result.as_object().unwrap().is_empty() {
-        return Err(anyhow::anyhow!("Could not resolve {:?}", audio_file_data));
-    }
-
-    let out = result
-        .get("recording_mbid")
-        .ok_or_else(|| anyhow::anyhow!("Could not extract recording MBID from JSON: {:?}", result))?
-        .as_str()
-        .ok_or_else(|| anyhow!("Could not convert to string"))?;
-    Ok(out.to_string())
-}
-
 #[cfg(test)]
 mod test {
     use crate::*;
-
-    #[test]
-    fn test_get_recording_mbid_1() {
-        let test = AudioFileData {
-            artist: "Ed Sheeran".parse().unwrap(),
-            title: "Perfect".parse().unwrap(),
-        };
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        let result = rt.block_on(async { get_musicbrainz_id_for_audio_data(test).await.unwrap() });
-        assert_eq!(result, "b84dd2d1-2bf1-4fcc-aadc-6cc39c36ba35");
-    }
-
-    #[test]
-    fn test_get_recording_mbid_2() {
-        let test = AudioFileData {
-            artist: "Akihito Okano".parse().unwrap(),
-            title: "光あれ".parse().unwrap(),
-        };
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        let result = rt.block_on(async { get_musicbrainz_id_for_audio_data(test).await.unwrap() });
-        assert_eq!(result, "");
-    }
-
-    #[test]
-    #[should_panic]
-    fn test_get_recording_mbid_fail_1() {
-        let test = AudioFileData {
-            artist: "Ed Sheeran".parse().unwrap(),
-            title: "Asdjkhfgds".parse().unwrap(),
-        };
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async { get_musicbrainz_id_for_audio_data(test).await.unwrap() });
-    }
 
     #[test]
     fn test_load_songs_from_playlist() {
