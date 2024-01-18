@@ -13,7 +13,7 @@ use log::{error, info};
 use m3u::Entry;
 use num_traits::ToPrimitive;
 use reqwest::header::AUTHORIZATION;
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::path::PathBuf;
 use std::process::exit;
 use std::sync::Arc;
@@ -247,14 +247,11 @@ async fn give_song_feedback_for_mbid(
     feedback: Feedback,
 ) -> Result<()> {
     let client = reqwest::Client::new();
-    let parameters = [
-        ("recording_mbid", mbid),
-        ("score", &(feedback as i8).to_string()),
-    ];
+    let parameters = json!({"recording_mbid": mbid,"score": &(feedback as i8).to_string(),});
     let response = client
         .post("https://api.listenbrainz.org/1/feedback/recording-feedback")
         .header(AUTHORIZATION, format!("Token {}", user_token))
-        .form(&parameters)
+        .json(&parameters)
         .send()
         .await;
     return match response {
