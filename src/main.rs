@@ -1,3 +1,5 @@
+mod playlist;
+
 use anyhow::{anyhow, Error, Result};
 use audiotags::Tag;
 use clap::{Parser, ValueEnum};
@@ -11,8 +13,7 @@ use log::{error, info};
 use m3u::Entry;
 use num_traits::ToPrimitive;
 use reqwest::header::AUTHORIZATION;
-use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::Value;
 use std::path::PathBuf;
 use std::process::exit;
 use std::sync::Arc;
@@ -46,11 +47,6 @@ enum Feedback {
 struct AudioFileData {
     artist: String,
     title: String,
-}
-
-#[derive(Deserialize)]
-struct PlaylistResponse {
-    playlist_mbid: String,
 }
 
 #[tokio::main]
@@ -119,7 +115,8 @@ async fn main() {
         number_of_resolved_songs, number_of_tagged_songs, percentage,
     );
 
-    match submit_playlist(&token, &musicbrainz_ids, args.playlist_name, args.public).await {
+    match playlist::submit_playlist(&token, &musicbrainz_ids, args.playlist_name, args.public).await
+    {
         Ok(r) => {
             info!("Playlist created with ID {}", r.playlist_mbid)
         }
@@ -264,24 +261,6 @@ async fn give_song_feedback_for_mbid(
         Ok(_) => Ok(()),
         Err(e) => Err(Error::from(e)),
     };
-}
-
-async fn submit_playlist(
-    user_token: &String,
-    mbid_vec: &Vec<String>,
-    playlist_name: String,
-    public_playlist: bool,
-) -> Result<PlaylistResponse> {
-    let client = reqwest::Client::new();
-    let data = json!({"playlist":{"title": playlist_name.as_str(), "tracks":mbid_vec.clone(), "extension":{ "https://musicbrainz.org/doc/jspf#playlist": {"public": public_playlist,}}}});
-    let response = client
-        .post("https://api.listenbrainz.org/1/playlist/create")
-        .header(AUTHORIZATION, format!("Token {}", user_token))
-        .json(&data)
-        .send()
-        .await?;
-    let playlist_id = response.json::<PlaylistResponse>().await?;
-    Ok(playlist_id)
 }
 
 async fn get_musicbrainz_id_for_audio_data(audio_file_data: AudioFileData) -> Result<String> {
