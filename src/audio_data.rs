@@ -166,6 +166,18 @@ mod test {
     }
 
     #[test]
+    fn test_get_recording_mbid_4() {
+        let test = AudioFileData {
+            artist: "Florence + the Machine".parse().unwrap(),
+            title: "Never Let Me Go".parse().unwrap(),
+            album: None,
+        };
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(async { get_musicbrainz_id_for_audio_data(test).await.unwrap() });
+        assert_eq!(result, "764f4c40-1c16-44a7-a6e6-b8c426604b57");
+    }
+
+    #[test]
     #[should_panic]
     fn test_get_recording_mbid_fail_1() {
         let test = AudioFileData {
