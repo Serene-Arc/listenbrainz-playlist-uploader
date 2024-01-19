@@ -102,13 +102,13 @@ pub fn load_tags_from_file_path(playlist_entries: PathBuf) -> Result<AudioFileDa
         .parse()?;
     let album = tags
         .album()
-        .ok_or(anyhow!("Could not read title"))?
+        .ok_or(anyhow!("Could not read album"))?
         .title
         .to_string();
     Ok(AudioFileData {
         artist,
         title,
-        album: Some(album),
+        album: if album.len() > 0 { Some(album) } else { None },
     })
 }
 
