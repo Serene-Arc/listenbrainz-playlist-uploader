@@ -37,6 +37,8 @@ struct Args {
     verbose: Verbosity<InfoLevel>,
     #[arg(value_enum, short, long, default_value = "none")]
     duplicate_action: DuplicateAction,
+    #[arg(short, long, default_value_t = false)]
+    no_confirm: bool,
 }
 
 #[derive(ValueEnum, Debug, Clone, Copy)]
@@ -132,19 +134,24 @@ async fn main() {
         number_of_resolved_songs, number_of_tagged_songs, percentage,
     );
 
-    match Confirm::new("Do you want to continue with the matched songs?")
-        .with_default(true)
-        .prompt()
-    {
-        Ok(true) => {
-            info!("Continuing")
-        }
-        Ok(false) => {
-            info!("Aborting");
-            exit(1)
-        }
-        Err(_) => {
-            error!("Error with questionaire")
+    match args.no_confirm {
+        true => {}
+        false => {
+            match Confirm::new("Do you want to continue with the matched songs?")
+                .with_default(true)
+                .prompt()
+            {
+                Ok(true) => {
+                    info!("Continuing")
+                }
+                Ok(false) => {
+                    info!("Aborting");
+                    exit(1)
+                }
+                Err(_) => {
+                    error!("Error with questionaire")
+                }
+            }
         }
     }
 
