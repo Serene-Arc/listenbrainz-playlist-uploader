@@ -2,9 +2,10 @@ use anyhow::{anyhow, Result};
 use audiotags::Tag;
 use cached::proc_macro::cached;
 use musicbrainz_rs::entity::artist::{Artist, ArtistSearchQuery};
-use musicbrainz_rs::entity::recording::{Recording, RecordingSearchQuery};
 use musicbrainz_rs::Search;
+use serde_json::Value;
 use std::path::PathBuf;
+use url::Url;
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct AudioFileData {
@@ -20,52 +21,39 @@ pub struct ArtistData {
 }
 
 pub async fn get_musicbrainz_id_for_audio_data(audio_file_data: AudioFileData) -> Result<String> {
-    let artist_identifier = get_artist_mbid(audio_file_data.artist.clone()).await;
+    let mut result =
+        make_listenbrainz_lookup_request(&audio_file_data.title, &audio_file_data.artist).await?;
 
-    let query = construct_song_search_query(&audio_file_data, &artist_identifier);
-    let mut result = Recording::search(query).execute().await?;
-
-    if result.count <= 0 {
-        let audio_data_no_album = AudioFileData {
-            title: audio_file_data.title.clone(),
-            artist: audio_file_data.artist.clone(),
-            album: None,
-        };
-        let query = construct_song_search_query(&audio_data_no_album, &artist_identifier);
-        result = Recording::search(query).execute().await?;
+    if result.as_object().unwrap().is_empty() {
+        // Attempt to resolve artist and try that, it might be an alias
+        let artist = get_artist_mbid((&audio_file_data).artist.clone()).await;
+        result =
+            make_listenbrainz_lookup_request(&audio_file_data.title, &artist.artist_tag).await?;
     }
 
-    let all_mbids: Vec<_> = result.entities.iter().map(|e| e.id.clone()).collect();
-    if all_mbids.len() <= 0 {
-        return Err(anyhow!(
-            "No matches found for the given song tags: {:?}",
-            audio_file_data
-        ));
+    if result.as_object().unwrap().is_empty() {
+        return Err(anyhow::anyhow!("Could not resolve {:?}", audio_file_data));
     }
-    // TODO: something fancy here to choose the best one
-    // For now, just return the first one
-    Ok(all_mbids.first().expect("Could not get first MBID").clone())
+
+    let out = result
+        .get("recording_mbid")
+        .ok_or_else(|| anyhow::anyhow!("Could not extract recording MBID from JSON: {:?}", result))?
+        .as_str()
+        .ok_or_else(|| anyhow!("Could not convert to string"))?;
+    Ok(out.to_string())
 }
 
-fn construct_song_search_query(
-    audio_file_data: &AudioFileData,
-    artist_data: &ArtistData,
-) -> String {
-    let mut query = RecordingSearchQuery::query_builder();
-    match artist_data.mbid.clone() {
-        None => query.artist(artist_data.artist_tag.as_str()),
-        Some(mbid) => query.arid(mbid.as_str()),
-    }
-    .and()
-    .recording(audio_file_data.title.as_str());
-
-    match &audio_file_data.album {
-        None => {}
-        Some(a) => {
-            query.and().release(a.as_str());
-        }
-    }
-    query.build()
+async fn make_listenbrainz_lookup_request(title: &String, artist: &String) -> Result<Value> {
+    let request_url: Url = Url::parse_with_params(
+        "https://api.listenbrainz.org/1/metadata/lookup/",
+        &[("artist_name", artist), ("recording_name", title)],
+    )?;
+    let result = reqwest::get(request_url)
+        .await?
+        .error_for_status()?
+        .json::<Value>()
+        .await?;
+    Ok(result)
 }
 
 #[cached]
@@ -97,10 +85,10 @@ async fn get_artist_mbid(artist_name: String) -> ArtistData {
     }
 
     // TODO: need to do something clever here too to find the best one
-    let first_mbid = result.entities.first().unwrap().id.clone();
+    let artist = result.entities.first().unwrap();
     ArtistData {
-        artist_tag: artist_name.clone(),
-        mbid: Some(first_mbid),
+        artist_tag: artist.name.clone(),
+        mbid: Some(artist.id.clone()),
     }
 }
 
@@ -174,7 +162,7 @@ mod test {
         };
         let rt = tokio::runtime::Runtime::new().unwrap();
         let result = rt.block_on(async { get_musicbrainz_id_for_audio_data(test).await.unwrap() });
-        assert_eq!(result, "764f4c40-1c16-44a7-a6e6-b8c426604b57");
+        assert_eq!(result, "589b2eff-e541-475b-bbe7-ca778238e711");
     }
 
     #[test]
