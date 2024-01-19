@@ -22,8 +22,19 @@ pub struct ArtistData {
 pub async fn get_musicbrainz_id_for_audio_data(audio_file_data: AudioFileData) -> Result<String> {
     let artist_identifier = get_artist_mbid(audio_file_data.artist.clone()).await;
 
-    let query = construct_song_search_query(&audio_file_data, artist_identifier);
-    let result = Recording::search(query).execute().await?;
+    let query = construct_song_search_query(&audio_file_data, &artist_identifier);
+    let mut result = Recording::search(query).execute().await?;
+
+    if result.count <= 0 {
+        let audio_data_no_album = AudioFileData {
+            title: audio_file_data.title.clone(),
+            artist: audio_file_data.artist.clone(),
+            album: None,
+        };
+        let query = construct_song_search_query(&audio_data_no_album, &artist_identifier);
+        result = Recording::search(query).execute().await?;
+    }
+
     let all_mbids: Vec<_> = result.entities.iter().map(|e| e.id.clone()).collect();
     if all_mbids.len() <= 0 {
         return Err(anyhow!(
@@ -36,9 +47,12 @@ pub async fn get_musicbrainz_id_for_audio_data(audio_file_data: AudioFileData) -
     Ok(all_mbids.first().expect("Could not get first MBID").clone())
 }
 
-fn construct_song_search_query(audio_file_data: &AudioFileData, artist_data: ArtistData) -> String {
+fn construct_song_search_query(
+    audio_file_data: &AudioFileData,
+    artist_data: &ArtistData,
+) -> String {
     let mut query = RecordingSearchQuery::query_builder();
-    match artist_data.mbid {
+    match artist_data.mbid.clone() {
         None => query.artist(artist_data.artist_tag.as_str()),
         Some(mbid) => query.arid(mbid.as_str()),
     }
