@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Result};
 use reqwest::header::AUTHORIZATION;
-use serde::{Deserialize, Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use url::Url;
@@ -23,9 +23,30 @@ struct ValidationResponse {
     user_name: String,
 }
 
-struct ExistingPlaylistResponse {
+#[derive(Deserialize)]
+pub struct ExistingPlaylistResponse {
     title: String,
-    playlist_id: String,
+    identifier: String,
+}
+
+impl ExistingPlaylistResponse {
+    pub fn from_json(json: &str) -> Result<Vec<Self>> {
+        let data: Value = serde_json::from_str(json)?;
+        let mut playlists: Vec<Self> = Vec::new();
+
+        if let Value::Array(playlists_data) = &data["playlists"] {
+            for playlist_data in playlists_data {
+                let identifier = playlist_data["playlist"]["identifier"].as_str().unwrap();
+                let title = playlist_data["playlist"]["title"].as_str().unwrap();
+                playlists.push(ExistingPlaylistResponse {
+                    title: title.to_string(),
+                    identifier: identifier.to_string(),
+                });
+            }
+        }
+
+        Ok(playlists)
+    }
 }
 
 impl Serialize for SubmissionPlaylist<'_> {
@@ -104,7 +125,10 @@ pub async fn get_current_user(user_token: &String) -> Result<String> {
     }
 }
 
-pub async fn get_current_playlists(token: &String, user_name: &String) -> Result<Vec<String>> {
+pub async fn get_current_playlists(
+    token: &String,
+    user_name: &String,
+) -> Result<Vec<ExistingPlaylistResponse>> {
     let url = Url::parse(&*format!(
         "https://api.listenbrainz.org/1/user/{}/playlists",
         user_name
@@ -116,8 +140,8 @@ pub async fn get_current_playlists(token: &String, user_name: &String) -> Result
         .send()
         .await;
     let response_text = response?.text().await?;
-    // let playlist_objects: Vec<ExistingPlaylistResponse> =
-    Ok(Vec::new())
+    let playlist_objects = ExistingPlaylistResponse::from_json(response_text.as_str())?;
+    Ok(playlist_objects)
 }
 
 #[cfg(test)]
