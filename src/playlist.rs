@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Result};
 use reqwest::header::AUTHORIZATION;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Serialize, Serializer};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use url::Url;

@@ -11,7 +11,6 @@ use futures::stream::FuturesUnordered;
 use futures::{FutureExt, StreamExt};
 use governor::{Quota, RateLimiter};
 use indicatif::ProgressBar;
-use inquire::error::InquireResult;
 use inquire::Confirm;
 use log::{debug, error, info};
 use m3u::Entry;
