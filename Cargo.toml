@@ -28,3 +28,4 @@ serde_test = "1.0.176"
 musicbrainz_rs = "0.5.0"
 inquire = "0.6.2"
 cached = { version = "0.47.0", features = ["proc_macro", "async"] }
+clap-markdown = "0.1.3"

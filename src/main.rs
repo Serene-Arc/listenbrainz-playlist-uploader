@@ -39,6 +39,8 @@ struct Args {
     duplicate_action: DuplicateAction,
     #[arg(short, long, default_value_t = false)]
     no_confirm: bool,
+    #[arg(long, hide = true)]
+    markdown_help: bool,
 }
 
 #[derive(ValueEnum, Debug, Clone, Copy)]
@@ -61,6 +63,11 @@ enum DuplicateAction {
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
+
+    if args.markdown_help {
+        clap_markdown::print_help_markdown::<Args>();
+        exit(0)
+    }
 
     let verbosity = args.verbose;
     env_logger::Builder::new()
