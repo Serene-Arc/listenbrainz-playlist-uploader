@@ -11,6 +11,8 @@ use futures::stream::FuturesUnordered;
 use futures::{FutureExt, StreamExt};
 use governor::{Quota, RateLimiter};
 use indicatif::ProgressBar;
+use inquire::error::InquireResult;
+use inquire::Confirm;
 use log::{debug, error, info};
 use m3u::Entry;
 use num_traits::ToPrimitive;
@@ -120,6 +122,22 @@ async fn main() {
         number_of_resolved_songs, number_of_tagged_songs, percentage,
     );
 
+    match Confirm::new("Do you want to continue with the matched songs?")
+        .with_default(true)
+        .prompt()
+    {
+        Ok(true) => {
+            info!("Continuing")
+        }
+        Ok(false) => {
+            info!("Aborting");
+            exit(1)
+        }
+        Err(_) => {
+            error!("Error with questionaire")
+        }
+    }
+
     debug!("Retrieving existing playlists");
     let current_playlists = match get_current_playlists(&token, &user_name).await {
         Ok(playlists) => playlists,
@@ -133,7 +151,7 @@ async fn main() {
         current_playlists.len()
     );
 
-    debug!("Retrieving existing playlists");
+    debug!("Submitting new playlist");
     match playlist::submit_playlist(&token, &musicbrainz_ids, args.playlist_name, args.public).await
     {
         Ok(r) => {
