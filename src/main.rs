@@ -2,9 +2,8 @@ mod audio_data;
 mod playlist;
 
 use crate::playlist::{get_current_playlists, get_current_user};
-use anyhow::{anyhow, Error, Result};
+use anyhow::{Error, Result};
 use audio_data::AudioFileData;
-use audiotags::Tag;
 use clap::{Parser, ValueEnum};
 use clap_verbosity_flag::{InfoLevel, Verbosity};
 use config::Config;
@@ -95,7 +94,7 @@ async fn main() {
 
     let song_data: Vec<_> = playlist_entries
         .into_iter()
-        .flat_map(|e| load_tags_from_file_path(e))
+        .flat_map(|e| audio_data::load_tags_from_file_path(e))
         .collect();
     let number_of_tagged_songs = song_data.len();
     let percentage = calculate_percentage(number_of_tagged_songs, number_of_files)
@@ -233,19 +232,6 @@ where
         (Some(first), Some(second)) if second != 0.0 => Some((first / second) * 100.0),
         _ => None,
     }
-}
-
-fn load_tags_from_file_path(playlist_entries: PathBuf) -> Result<AudioFileData> {
-    let tags = Tag::new().read_from_path(playlist_entries)?;
-    let artist = tags
-        .artist()
-        .ok_or(anyhow!("Could not read artist"))?
-        .parse()?;
-    let title = tags
-        .title()
-        .ok_or(anyhow!("Could not read title"))?
-        .parse()?;
-    Ok(AudioFileData { artist, title })
 }
 
 fn load_file_paths(file_path: &PathBuf) -> Vec<PathBuf> {
