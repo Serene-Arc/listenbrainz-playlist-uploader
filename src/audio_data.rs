@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Result};
 use audiotags::Tag;
+use cached::proc_macro::cached;
 use musicbrainz_rs::entity::artist::{Artist, ArtistSearchQuery};
 use musicbrainz_rs::entity::recording::{Recording, RecordingSearchQuery};
 use musicbrainz_rs::Search;
@@ -12,14 +13,14 @@ pub struct AudioFileData {
     pub album: Option<String>,
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub struct ArtistData {
     pub artist_tag: String,
     pub mbid: Option<String>,
 }
 
 pub async fn get_musicbrainz_id_for_audio_data(audio_file_data: AudioFileData) -> Result<String> {
-    let artist_identifier = get_artist_mbid(&audio_file_data.artist).await;
+    let artist_identifier = get_artist_mbid(audio_file_data.artist.clone()).await;
 
     let query = construct_song_search_query(&audio_file_data, artist_identifier);
     let result = Recording::search(query).execute().await?;
@@ -53,7 +54,8 @@ fn construct_song_search_query(audio_file_data: &AudioFileData, artist_data: Art
     query.build()
 }
 
-async fn get_artist_mbid(artist_name: &String) -> ArtistData {
+#[cached]
+async fn get_artist_mbid(artist_name: String) -> ArtistData {
     let query = ArtistSearchQuery::query_builder()
         .artist(artist_name.as_str())
         .build();
@@ -165,7 +167,7 @@ mod test {
     fn test_get_artist_mbid_1() {
         let test = "Ed Sheeran".to_string();
         let rt = tokio::runtime::Runtime::new().unwrap();
-        let result = rt.block_on(async { get_artist_mbid(&test).await });
+        let result = rt.block_on(async { get_artist_mbid(test).await });
         assert_eq!(result.mbid.unwrap(), "b8a7c51f-362c-4dcb-a259-bc6e0095f0a6")
     }
 
@@ -173,10 +175,7 @@ mod test {
     fn test_get_artist_mbid_2_non_english_with_alias() {
         let test = "Akihito Okano".to_string();
         let rt = tokio::runtime::Runtime::new().unwrap();
-        let result = rt.block_on(async { get_artist_mbid(&test).await });
-        assert_eq!(
-            result.mbid.unwrap(),
-            ("0f51ab24-c89a-438e-b3af-2d974fa0654a")
-        )
+        let result = rt.block_on(async { get_artist_mbid(test).await });
+        assert_eq!(result.mbid.unwrap(), "0f51ab24-c89a-438e-b3af-2d974fa0654a")
     }
 }
