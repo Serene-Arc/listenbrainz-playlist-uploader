@@ -25,8 +25,8 @@ struct ValidationResponse {
 
 #[derive(Deserialize)]
 pub struct ExistingPlaylistResponse {
-    title: String,
-    identifier: String,
+    pub title: String,
+    pub identifier: String,
 }
 
 impl ExistingPlaylistResponse {

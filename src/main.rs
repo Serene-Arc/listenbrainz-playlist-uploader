@@ -35,6 +35,8 @@ struct Args {
     public: bool,
     #[command(flatten)]
     verbose: Verbosity<InfoLevel>,
+    #[arg(value_enum, short, long, default_value = "none")]
+    duplicate_action: DuplicateAction,
 }
 
 #[derive(ValueEnum, Debug, Clone, Copy)]
@@ -43,6 +45,15 @@ enum Feedback {
     LOVE = 1,
     HATE = -1,
     NEUTRAL = 0,
+}
+
+#[derive(ValueEnum, Debug, Clone, Copy)]
+#[clap(rename_all = "lowercase")]
+enum DuplicateAction {
+    NONE,
+    OVERWRITE,
+    NUMBER,
+    ABORT,
 }
 
 #[tokio::main]
@@ -149,10 +160,42 @@ async fn main() {
         "Found {} existing playlists on account",
         current_playlists.len()
     );
+    let mut playlist_name = args.playlist_name.clone();
+    match current_playlists
+        .iter()
+        .any(|p| p.title == args.playlist_name)
+    {
+        true => {
+            info!("Found a duplicate playlist, enacting duplicate policy");
+            match args.duplicate_action {
+                DuplicateAction::NONE => {}
+                DuplicateAction::OVERWRITE => {
+                    todo!()
+                }
+                DuplicateAction::NUMBER => {
+                    for i in 1.. {
+                        let prospective_title = format!("{}_{}", args.playlist_name, i);
+                        if current_playlists
+                            .iter()
+                            .any(|p| p.title == prospective_title)
+                        {
+                            continue;
+                        } else {
+                            playlist_name = prospective_title;
+                        }
+                    }
+                }
+                DuplicateAction::ABORT => {
+                    error!("Duplicate action says to abort!");
+                    exit(1)
+                }
+            }
+        }
+        false => {}
+    }
 
     debug!("Submitting new playlist");
-    match playlist::submit_playlist(&token, &musicbrainz_ids, args.playlist_name, args.public).await
-    {
+    match playlist::submit_playlist(&token, &musicbrainz_ids, playlist_name, args.public).await {
         Ok(r) => {
             info!("Playlist created with ID {}", r.playlist_mbid)
         }
