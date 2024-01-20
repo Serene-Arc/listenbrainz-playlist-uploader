@@ -101,7 +101,7 @@ pub async fn submit_playlist(
     };
     let response = client
         .post("https://api.listenbrainz.org/1/playlist/create")
-        .header(AUTHORIZATION, format!("Token {}", user_token))
+        .header(AUTHORIZATION, format!("Token {user_token}"))
         .json(&data)
         .send()
         .await?;
@@ -113,13 +113,13 @@ pub async fn get_current_user(user_token: &String) -> Result<String> {
     let client = reqwest::Client::new();
     let response = client
         .get("https://api.listenbrainz.org/1/validate-token")
-        .header(AUTHORIZATION, format!("Token {}", user_token))
+        .header(AUTHORIZATION, format!("Token {user_token}"))
         .send()
         .await?;
     let test = response.text().await?;
     let response: ValidationResponse = serde_json::from_str(test.as_str())?;
     match response.code {
-        200 => return Ok(response.user_name),
+        200 => Ok(response.user_name),
         _ => Err(anyhow!("Response was {}", response.code)),
     }
 }
@@ -128,14 +128,13 @@ pub async fn get_current_playlists(
     token: &String,
     user_name: &String,
 ) -> Result<Vec<ExistingPlaylistResponse>> {
-    let url = Url::parse(&*format!(
-        "https://api.listenbrainz.org/1/user/{}/playlists",
-        user_name
+    let url = Url::parse(&format!(
+        "https://api.listenbrainz.org/1/user/{user_name}/playlists"
     ))?;
     let client = reqwest::Client::new();
     let response = client
         .get(url)
-        .header(AUTHORIZATION, format!("Token {}", token))
+        .header(AUTHORIZATION, format!("Token {token}"))
         .send()
         .await;
     let response_text = response?.text().await?;
