@@ -41,6 +41,11 @@ There is a rate limit for most of the calls to the Listenbrainz API. This is not
   - Possible values: `true`, `false`
   - Disables any interaction in the program.
 
+### Things to Do
+
+- Make the song search better so that more songs are matched.
+- Read the Listenbrainz rate limiting dynamically to be more efficient.
+
 <hr/>
 
 <small><i>
