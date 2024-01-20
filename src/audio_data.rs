@@ -26,7 +26,7 @@ pub async fn get_musicbrainz_id_for_audio_data(audio_file_data: AudioFileData) -
 
     if result.as_object().unwrap().is_empty() {
         // Attempt to resolve artist and try that, it might be an alias
-        let artist = get_artist_mbid((&audio_file_data).artist.clone()).await;
+        let artist = get_artist_mbid(audio_file_data.artist.clone()).await;
         result =
             make_listenbrainz_lookup_request(&audio_file_data.title, &artist.artist_tag).await?;
     }
@@ -110,7 +110,7 @@ pub fn load_tags_from_file_path(playlist_entries: PathBuf) -> Result<AudioFileDa
     Ok(AudioFileData {
         artist,
         title,
-        album: if album.len() > 0 { Some(album) } else { None },
+        album: if !album.is_empty() { Some(album) } else { None },
     })
 }
 
@@ -218,7 +218,7 @@ mod test {
         let test = "Ed Sheeran".to_string();
         let rt = tokio::runtime::Runtime::new().unwrap();
         let result = rt.block_on(async { get_artist_mbid(test).await });
-        assert_eq!(result.mbid.unwrap(), "b8a7c51f-362c-4dcb-a259-bc6e0095f0a6")
+        assert_eq!(result.mbid.unwrap(), "b8a7c51f-362c-4dcb-a259-bc6e0095f0a6");
     }
 
     #[test]
@@ -226,6 +226,6 @@ mod test {
         let test = "Akihito Okano".to_string();
         let rt = tokio::runtime::Runtime::new().unwrap();
         let result = rt.block_on(async { get_artist_mbid(test).await });
-        assert_eq!(result.mbid.unwrap(), "0f51ab24-c89a-438e-b3af-2d974fa0654a")
+        assert_eq!(result.mbid.unwrap(), "0f51ab24-c89a-438e-b3af-2d974fa0654a");
     }
 }

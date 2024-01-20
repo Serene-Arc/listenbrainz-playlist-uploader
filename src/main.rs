@@ -21,7 +21,7 @@ use std::path::PathBuf;
 use std::process::exit;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio;
+
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -84,14 +84,14 @@ async fn main() {
         exit(1);
     }
 
-    let token;
-    match settings.get_string("user_token") {
-        Ok(t) => token = t,
+    
+    let token = match settings.get_string("user_token") {
+        Ok(t) => t,
         Err(_) => {
             error!("Configuration does not contain a token!");
             exit(1);
         }
-    }
+    };
 
     debug!("Testing token by resolving to user");
     let user_name = match get_current_user(&token).await {
@@ -115,7 +115,7 @@ async fn main() {
 
     let song_data: Vec<_> = playlist_entries
         .into_iter()
-        .flat_map(|e| audio_data::load_tags_from_file_path(e))
+        .flat_map(audio_data::load_tags_from_file_path)
         .collect();
     let number_of_tagged_songs = song_data.len();
     let percentage = calculate_percentage(number_of_tagged_songs, number_of_files)
@@ -149,14 +149,14 @@ async fn main() {
                 .prompt()
             {
                 Ok(true) => {
-                    info!("Continuing")
+                    info!("Continuing");
                 }
                 Ok(false) => {
                     info!("Aborting");
                     exit(1)
                 }
                 Err(_) => {
-                    error!("Error with questionaire")
+                    error!("Error with questionaire");
                 }
             }
         }
@@ -211,17 +211,17 @@ async fn main() {
     debug!("Submitting new playlist");
     match playlist::submit_playlist(&token, &musicbrainz_ids, playlist_name, args.public).await {
         Ok(r) => {
-            info!("Playlist created with ID {}", r.playlist_mbid)
+            info!("Playlist created with ID {}", r.playlist_mbid);
         }
         Err(e) => {
-            error!("Could not create playlist: {}", e)
+            error!("Could not create playlist: {}", e);
         }
     }
     match args.feedback {
         None => {}
         Some(f) => {
             info!("Sending feedback for songs in playlist...");
-            give_feedback_on_all_songs(&musicbrainz_ids, &token, f).await
+            give_feedback_on_all_songs(&musicbrainz_ids, &token, f).await;
         }
     }
 }
@@ -238,7 +238,7 @@ async fn give_feedback_on_all_songs(
 
     let progress_bar = Arc::new(ProgressBar::new(musicbrainz_ids.len() as u64));
     let futures: FuturesUnordered<_> = musicbrainz_ids
-        .into_iter()
+        .iter()
         .map(|mbid| {
             let limiter = Arc::clone(&rate_limiter);
             let pb = Arc::clone(&progress_bar);
@@ -255,9 +255,9 @@ async fn give_feedback_on_all_songs(
     let results: Vec<Result<()>> = futures.collect().await;
     for result in results {
         match result {
-            Ok(_) => {}
+            Ok(()) => {}
             Err(e) => {
-                error!("Could not give feedback on song: {}", e)
+                error!("Could not give feedback on song: {}", e);
             }
         }
     }
@@ -285,7 +285,8 @@ async fn resolve_all_songs_for_mbids(song_data: Vec<AudioFileData>) -> Vec<Strin
         .collect();
 
     let musicbrainz_ids: Vec<Result<String>> = futures.collect().await;
-    let musicbrainz_ids = musicbrainz_ids
+    
+    musicbrainz_ids
         .into_iter()
         .filter_map(|result| match result {
             Ok(s) => Some(s),
@@ -294,8 +295,7 @@ async fn resolve_all_songs_for_mbids(song_data: Vec<AudioFileData>) -> Vec<Strin
                 None
             }
         })
-        .collect();
-    musicbrainz_ids
+        .collect()
 }
 
 fn calculate_percentage<T>(first: T, second: T) -> Option<f64>
@@ -330,14 +330,14 @@ async fn give_song_feedback_for_mbid(
     let parameters = json!({"recording_mbid": mbid,"score": &(feedback as i8).to_string(),});
     let response = client
         .post("https://api.listenbrainz.org/1/feedback/recording-feedback")
-        .header(AUTHORIZATION, format!("Token {}", user_token))
+        .header(AUTHORIZATION, format!("Token {user_token}"))
         .json(&parameters)
         .send()
         .await;
-    return match response {
+    match response {
         Ok(_) => Ok(()),
         Err(e) => Err(Error::from(e)),
-    };
+    }
 }
 
 #[cfg(test)]
@@ -349,6 +349,6 @@ mod test {
         let file_path = &PathBuf::from("./tests/test_playlist_1.m3u");
         let result = load_file_paths(file_path);
 
-        assert_eq!(result.len(), 4)
+        assert_eq!(result.len(), 4);
     }
 }
