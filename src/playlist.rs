@@ -19,7 +19,6 @@ struct SubmissionPlaylist<'a> {
 #[derive(Debug, Deserialize)]
 struct ValidationResponse {
     code: usize,
-    valid: bool,
     user_name: String,
 }
 
