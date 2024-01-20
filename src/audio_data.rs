@@ -118,7 +118,7 @@ pub fn load_tags_from_file_path(playlist_entries: PathBuf) -> Result<AudioFileDa
 mod test {
     use super::*;
     #[test]
-    fn test_get_recording_mbid_1() {
+    fn test_get_recording_mbid_general_1() {
         let test = AudioFileData {
             artist: "Ed Sheeran".parse().unwrap(),
             title: "Perfect".parse().unwrap(),
@@ -130,7 +130,19 @@ mod test {
     }
 
     #[test]
-    fn test_get_recording_mbid_2() {
+    fn test_get_recording_mbid_general_2() {
+        let test = AudioFileData {
+            artist: "Sasha Alex Sloan".parse().unwrap(),
+            title: "Dancing with Your Ghost".parse().unwrap(),
+            album: None,
+        };
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(async { get_musicbrainz_id_for_audio_data(test).await.unwrap() });
+        assert_eq!(result, "9ae71082-ac47-4b9c-a12b-a67fff75784a");
+    }
+
+    #[test]
+    fn test_get_recording_mbid_artist_alias() {
         let test = AudioFileData {
             artist: "Akihito Okano".parse().unwrap(),
             title: "光あれ".parse().unwrap(),
@@ -142,7 +154,7 @@ mod test {
     }
 
     #[test]
-    fn test_get_recording_mbid_3() {
+    fn test_get_recording_mbid_two_artists_and_join() {
         let test = AudioFileData {
             artist: "Ed Sheeran & Beyonce".parse().unwrap(),
             title: "Perfect Duet".parse().unwrap(),
@@ -154,7 +166,7 @@ mod test {
     }
 
     #[test]
-    fn test_get_recording_mbid_4() {
+    fn test_get_recording_mbid_band_name_with_character() {
         let test = AudioFileData {
             artist: "Florence + the Machine".parse().unwrap(),
             title: "Never Let Me Go".parse().unwrap(),
@@ -163,6 +175,30 @@ mod test {
         let rt = tokio::runtime::Runtime::new().unwrap();
         let result = rt.block_on(async { get_musicbrainz_id_for_audio_data(test).await.unwrap() });
         assert_eq!(result, "589b2eff-e541-475b-bbe7-ca778238e711");
+    }
+
+    #[test]
+    fn test_get_recording_mbid_two_artist_feat_join() {
+        let test = AudioFileData {
+            artist: "Justin Bieber feat. Khalid".parse().unwrap(),
+            title: "As I Am".parse().unwrap(),
+            album: None,
+        };
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(async { get_musicbrainz_id_for_audio_data(test).await.unwrap() });
+        assert_eq!(result, "4f8268ae-8db1-42a7-baca-b1a0b0b879c4");
+    }
+
+    #[test]
+    fn test_get_recording_mbid_artist_partial_name() {
+        let test = AudioFileData {
+            artist: "Sasha Sloan".parse().unwrap(),
+            title: "Dancing with Your Ghost".parse().unwrap(),
+            album: None,
+        };
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(async { get_musicbrainz_id_for_audio_data(test).await.unwrap() });
+        assert_eq!(result, "9ae71082-ac47-4b9c-a12b-a67fff75784a");
     }
 
     #[test]
