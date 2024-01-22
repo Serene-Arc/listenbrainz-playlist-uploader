@@ -171,7 +171,7 @@ async fn main() {
             exit(1)
         }
     };
-    info!(
+    debug!(
         "Found {} existing playlists on account",
         current_playlists.len()
     );
@@ -213,7 +213,7 @@ async fn main() {
                             }
                         }
                     } else {
-                        info!("Existing playlist already has no tracks");
+                        debug!("Existing playlist already has no tracks");
                     }
                     let insertion_request =
                         mass_add_to_playlist(&token, &p.identifier, &musicbrainz_ids).await;
