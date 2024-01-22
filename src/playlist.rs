@@ -1,5 +1,7 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Error, Result};
+use log::{debug, info};
 use reqwest::header::AUTHORIZATION;
+use reqwest::StatusCode;
 use serde::{Deserialize, Serialize, Serializer};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
@@ -12,7 +14,7 @@ pub struct PlaylistSubmissionResponse {
 
 struct SubmissionPlaylist<'a> {
     name: String,
-    song_mbids: &'a Vec<String>,
+    song_mbids: &'a [String],
     public: bool,
 }
 
@@ -26,6 +28,7 @@ struct ValidationResponse {
 pub struct ExistingPlaylistResponse {
     pub title: String,
     pub identifier: String,
+    pub number_of_tracks: usize,
 }
 
 impl ExistingPlaylistResponse {
@@ -33,13 +36,21 @@ impl ExistingPlaylistResponse {
         let data: Value = serde_json::from_str(json)?;
         let mut playlists: Vec<Self> = Vec::new();
 
-        if let Value::Array(playlists_data) = &data["playlists"] {
-            for playlist_data in playlists_data {
+        if let Value::Array(individual_playlist) = &data["playlists"] {
+            for playlist_data in individual_playlist {
                 let identifier = playlist_data["playlist"]["identifier"].as_str().unwrap();
                 let title = playlist_data["playlist"]["title"].as_str().unwrap();
+                let number_of_tracks = playlist_data["playlist"]["track"].as_array().unwrap();
+                info!("{}", playlist_data);
                 playlists.push(ExistingPlaylistResponse {
                     title: title.to_string(),
-                    identifier: identifier.to_string(),
+                    identifier: identifier
+                        .rsplit('/')
+                        .collect::<Vec<&str>>()
+                        .first()
+                        .unwrap()
+                        .to_string(),
+                    number_of_tracks: number_of_tracks.len(),
                 });
             }
         }
@@ -128,6 +139,7 @@ pub async fn get_current_playlists(
     token: &String,
     user_name: &String,
 ) -> Result<Vec<ExistingPlaylistResponse>> {
+    // TODO: Add pagination parsing
     let url = Url::parse(&format!(
         "https://api.listenbrainz.org/1/user/{user_name}/playlists"
     ))?;
@@ -140,6 +152,76 @@ pub async fn get_current_playlists(
     let response_text = response?.text().await?;
     let playlist_objects = ExistingPlaylistResponse::from_json(response_text.as_str())?;
     Ok(playlist_objects)
+}
+
+pub async fn delete_item_from_playlist(
+    token: &String,
+    playlist_id: &String,
+    start_index: usize,
+    count_to_remove: usize,
+) -> Result<()> {
+    let url = Url::parse(&format!(
+        "https://api.listenbrainz.org/1/playlist/{}/item/delete",
+        playlist_id,
+    ))?;
+    debug!("Deleting tracks from playlist with URL '{}'", &url);
+    let client = reqwest::Client::new();
+    let data = HashMap::from([("index", start_index), ("count", count_to_remove)]);
+    let response = client
+        .post(url)
+        .header(AUTHORIZATION, format!("Token {}", token))
+        .json(&data)
+        .send()
+        .await;
+    let response = response?.status();
+    match_error_from_playlist_change(response)
+}
+
+pub async fn mass_add_to_playlist(
+    token: &String,
+    playlist_id: &String,
+    track_mbids: &[String],
+) -> Result<()> {
+    for chunk in track_mbids.chunks(100) {
+        add_items_to_playlist(token, playlist_id, chunk).await?
+    }
+    Ok(())
+}
+
+pub async fn add_items_to_playlist(
+    token: &String,
+    playlist_id: &String,
+    track_mbids: &[String],
+) -> Result<()> {
+    let url = Url::parse(&format!(
+        "https://api.listenbrainz.org/1/playlist/{}/item/add/0",
+        playlist_id,
+    ))?;
+    debug!("Inserting tracks to playlist with URL '{}'", &url);
+    let client = reqwest::Client::new();
+    let data = SubmissionPlaylist {
+        name: "addition".to_string(),
+        public: false,
+        song_mbids: track_mbids,
+    };
+    let response = client
+        .post(url)
+        .header(AUTHORIZATION, format!("Token {}", token))
+        .json(&data)
+        .send()
+        .await;
+    let response = response?.status();
+    match_error_from_playlist_change(response)
+}
+
+fn match_error_from_playlist_change(response: StatusCode) -> Result<(), Error> {
+    match response.as_u16() {
+        200 => Ok(()),
+        400 => Err(anyhow!("Request was badly formulated")),
+        401 => Err(anyhow!("Authorisation failed")),
+        403 => Err(anyhow!("Not authorised to delete from this playlist")),
+        error => Err(anyhow!("The request returned error code {}", error)),
+    }
 }
 
 #[cfg(test)]

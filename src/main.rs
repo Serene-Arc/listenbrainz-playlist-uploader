@@ -1,7 +1,9 @@
 mod audio_data;
 mod playlist;
 
-use crate::playlist::{get_current_playlists, get_current_user};
+use crate::playlist::{
+    delete_item_from_playlist, get_current_playlists, get_current_user, mass_add_to_playlist,
+};
 use anyhow::{Error, Result};
 use audio_data::AudioFileData;
 use clap::{Parser, ValueEnum};
@@ -173,16 +175,43 @@ async fn main() {
         current_playlists.len()
     );
     let mut playlist_name = args.playlist_name.clone();
-    match current_playlists
+    let searched_playlist = current_playlists
         .iter()
-        .any(|p| p.title == args.playlist_name)
-    {
-        true => {
+        .find(|p| p.title == args.playlist_name);
+    match searched_playlist {
+        Some(p) => {
             info!("Found a duplicate playlist, enacting duplicate policy");
             match args.duplicate_action {
                 DuplicateAction::None => {}
                 DuplicateAction::Overwrite => {
-                    todo!()
+                    if p.number_of_tracks > 0 {
+                        let deletion_request =
+                            delete_item_from_playlist(&token, &p.identifier, 0, 9999).await;
+                        match deletion_request {
+                            Ok(_) => {}
+                            Err(e) => {
+                                error!(
+                                    "Could not delete items from playlist to overwrite it: {}",
+                                    e
+                                );
+                                exit(1)
+                            }
+                        }
+                    } else {
+                        info!("Existing playlist already has no tracks");
+                    }
+                    let insertion_request =
+                        mass_add_to_playlist(&token, &p.identifier, &musicbrainz_ids).await;
+                    match insertion_request {
+                        Ok(_) => {
+                            info!("Replaced songs in playlist with ID {}", p.identifier);
+                            exit(0)
+                        }
+                        Err(e) => {
+                            error!("Could not insert new items into playlist: {}", e);
+                            exit(1)
+                        }
+                    }
                 }
                 DuplicateAction::Number => {
                     for i in 1.. {
@@ -203,7 +232,9 @@ async fn main() {
                 }
             }
         }
-        false => {}
+        None => {
+            info!("No duplicate playlists found")
+        }
     }
 
     debug!("Submitting new playlist");
