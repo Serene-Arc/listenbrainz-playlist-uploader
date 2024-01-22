@@ -35,7 +35,6 @@ There is a rate limit for most of the calls to the Listenbrainz API. This is not
   - What to do when there is already a playlist by the same name on your account.
     - If you choose, `number`, a number will be appended to the end of the playlist name.
     - If you choose none, two playlists will have the same name but separate IDs.
-    - Overwrite option is **TO BE IMPLEMENTED**
 * `-n`, `--no-confirm`
   - Default value: `false`
   - Possible values: `true`, `false`
@@ -45,6 +44,7 @@ There is a rate limit for most of the calls to the Listenbrainz API. This is not
 
 - Make the song search better so that more songs are matched.
 - Read the Listenbrainz rate limiting dynamically to be more efficient.
+- Add pagination for playlist finding.
 
 <hr/>
 
