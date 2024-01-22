@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Error, Result};
-use log::{debug, info};
+use log::debug;
 use reqwest::header::AUTHORIZATION;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize, Serializer};
@@ -24,14 +24,18 @@ struct ValidationResponse {
     user_name: String,
 }
 
-#[derive(Deserialize)]
-pub struct ExistingPlaylistResponse {
+pub struct SimpleExistingPlaylistResponse {
+    pub title: String,
+    pub identifier: String,
+}
+
+pub struct FullExistingPlaylistResponse {
     pub title: String,
     pub identifier: String,
     pub number_of_tracks: usize,
 }
 
-impl ExistingPlaylistResponse {
+impl SimpleExistingPlaylistResponse {
     pub fn from_json(json: &str) -> Result<Vec<Self>> {
         let data: Value = serde_json::from_str(json)?;
         let mut playlists: Vec<Self> = Vec::new();
@@ -40,9 +44,7 @@ impl ExistingPlaylistResponse {
             for playlist_data in individual_playlist {
                 let identifier = playlist_data["playlist"]["identifier"].as_str().unwrap();
                 let title = playlist_data["playlist"]["title"].as_str().unwrap();
-                let number_of_tracks = playlist_data["playlist"]["track"].as_array().unwrap();
-                info!("{}", playlist_data);
-                playlists.push(ExistingPlaylistResponse {
+                playlists.push(SimpleExistingPlaylistResponse {
                     title: title.to_string(),
                     identifier: identifier
                         .rsplit('/')
@@ -50,15 +52,38 @@ impl ExistingPlaylistResponse {
                         .first()
                         .unwrap()
                         .to_string(),
-                    number_of_tracks: number_of_tracks.len(),
                 });
             }
         }
-
         Ok(playlists)
     }
 }
 
+impl FullExistingPlaylistResponse {
+    pub fn from_json(json: &str) -> Result<Self> {
+        let data: Value = serde_json::from_str(json)?;
+
+        let identifier = data["playlist"]["identifier"].as_str().unwrap();
+        let title = data["playlist"]["title"].as_str().unwrap();
+        let number_of_tracks = data["playlist"]["track"].as_array().unwrap().len();
+        Ok(FullExistingPlaylistResponse {
+            title: title.to_string(),
+            identifier: identifier
+                .rsplit('/')
+                .collect::<Vec<&str>>()
+                .first()
+                .unwrap()
+                .to_string(),
+            number_of_tracks,
+        })
+    }
+    pub async fn convert_simple_playlist_response_to_full(
+        token: &String,
+        simple_playlist: &SimpleExistingPlaylistResponse,
+    ) -> Result<Self> {
+        get_full_specific_playlist(token, &simple_playlist.identifier).await
+    }
+}
 impl Serialize for SubmissionPlaylist<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -138,7 +163,7 @@ pub async fn get_current_user(user_token: &String) -> Result<String> {
 pub async fn get_current_playlists(
     token: &String,
     user_name: &String,
-) -> Result<Vec<ExistingPlaylistResponse>> {
+) -> Result<Vec<SimpleExistingPlaylistResponse>> {
     // TODO: Add pagination parsing
     let url = Url::parse(&format!(
         "https://api.listenbrainz.org/1/user/{user_name}/playlists"
@@ -150,7 +175,26 @@ pub async fn get_current_playlists(
         .send()
         .await;
     let response_text = response?.text().await?;
-    let playlist_objects = ExistingPlaylistResponse::from_json(response_text.as_str())?;
+    let playlist_objects = SimpleExistingPlaylistResponse::from_json(response_text.as_str())?;
+    Ok(playlist_objects)
+}
+
+async fn get_full_specific_playlist(
+    token: &String,
+    playlist_id: &String,
+) -> Result<FullExistingPlaylistResponse> {
+    let url = Url::parse(&format!(
+        "https://api.listenbrainz.org/1/playlist/{}",
+        playlist_id
+    ))?;
+    let client = reqwest::Client::new();
+    let response = client
+        .get(url)
+        .header(AUTHORIZATION, format!("Token {token}"))
+        .send()
+        .await;
+    let response_text = response?.text().await?;
+    let playlist_objects = FullExistingPlaylistResponse::from_json(response_text.as_str())?;
     Ok(playlist_objects)
 }
 

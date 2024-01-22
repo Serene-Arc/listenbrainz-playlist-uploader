@@ -3,6 +3,7 @@ mod playlist;
 
 use crate::playlist::{
     delete_item_from_playlist, get_current_playlists, get_current_user, mass_add_to_playlist,
+    FullExistingPlaylistResponse,
 };
 use anyhow::{Error, Result};
 use audio_data::AudioFileData;
@@ -180,6 +181,20 @@ async fn main() {
         .find(|p| p.title == args.playlist_name);
     match searched_playlist {
         Some(p) => {
+            let p = match FullExistingPlaylistResponse::convert_simple_playlist_response_to_full(
+                &token, p,
+            )
+            .await
+            {
+                Err(e) => {
+                    error!(
+                        "Could not find more detailed information on possible duplicate playlist: {}",
+                        e
+                    );
+                    exit(0)
+                }
+                Ok(p) => p,
+            };
             info!("Found a duplicate playlist, enacting duplicate policy");
             match args.duplicate_action {
                 DuplicateAction::None => {}
