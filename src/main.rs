@@ -22,7 +22,6 @@ use std::process::exit;
 use std::sync::Arc;
 use std::time::Duration;
 
-
 #[derive(Parser, Debug)]
 struct Args {
     file: PathBuf,
@@ -46,18 +45,18 @@ struct Args {
 #[derive(ValueEnum, Debug, Clone, Copy)]
 #[clap(rename_all = "lowercase")]
 enum Feedback {
-    LOVE = 1,
-    HATE = -1,
-    NEUTRAL = 0,
+    Love = 1,
+    Hate = -1,
+    Neutral = 0,
 }
 
 #[derive(ValueEnum, Debug, Clone, Copy)]
 #[clap(rename_all = "lowercase")]
 enum DuplicateAction {
-    NONE,
-    OVERWRITE,
-    NUMBER,
-    ABORT,
+    None,
+    Overwrite,
+    Number,
+    Abort,
 }
 
 #[tokio::main]
@@ -84,7 +83,6 @@ async fn main() {
         exit(1);
     }
 
-    
     let token = match settings.get_string("user_token") {
         Ok(t) => t,
         Err(_) => {
@@ -182,11 +180,11 @@ async fn main() {
         true => {
             info!("Found a duplicate playlist, enacting duplicate policy");
             match args.duplicate_action {
-                DuplicateAction::NONE => {}
-                DuplicateAction::OVERWRITE => {
+                DuplicateAction::None => {}
+                DuplicateAction::Overwrite => {
                     todo!()
                 }
-                DuplicateAction::NUMBER => {
+                DuplicateAction::Number => {
                     for i in 1.. {
                         let prospective_title = format!("{}_{}", args.playlist_name, i);
                         if current_playlists
@@ -199,7 +197,7 @@ async fn main() {
                         }
                     }
                 }
-                DuplicateAction::ABORT => {
+                DuplicateAction::Abort => {
                     error!("Duplicate action says to abort!");
                     exit(1)
                 }
@@ -285,7 +283,7 @@ async fn resolve_all_songs_for_mbids(song_data: Vec<AudioFileData>) -> Vec<Strin
         .collect();
 
     let musicbrainz_ids: Vec<Result<String>> = futures.collect().await;
-    
+
     musicbrainz_ids
         .into_iter()
         .filter_map(|result| match result {
