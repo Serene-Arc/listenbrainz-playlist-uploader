@@ -13,7 +13,7 @@ use config::Config;
 use futures::stream::FuturesUnordered;
 use futures::{FutureExt, StreamExt};
 use governor::{Quota, RateLimiter};
-use indicatif::ProgressBar;
+use indicatif::{ProgressBar, ProgressStyle};
 use inquire::Confirm;
 use log::{debug, error, info};
 use m3u::Entry;
@@ -280,7 +280,7 @@ async fn give_feedback_on_all_songs(
         Quota::with_period(Duration::from_secs(5)).expect("Could not create quota"),
     ));
 
-    let progress_bar = Arc::new(ProgressBar::new(musicbrainz_ids.len() as u64));
+    let progress_bar = make_progress_bar(musicbrainz_ids.len());
     let futures: FuturesUnordered<_> = musicbrainz_ids
         .iter()
         .map(|mbid| {
@@ -312,7 +312,7 @@ async fn resolve_all_songs_for_mbids(song_data: Vec<AudioFileData>) -> Vec<Strin
         Quota::with_period(Duration::from_secs(5)).expect("Could not create quota"),
     ));
 
-    let progress_bar = Arc::new(ProgressBar::new(song_data.len() as u64));
+    let progress_bar = make_progress_bar(song_data.len());
     let futures: FuturesUnordered<_> = song_data
         .into_iter()
         .map(|data| {
@@ -340,6 +340,12 @@ async fn resolve_all_songs_for_mbids(song_data: Vec<AudioFileData>) -> Vec<Strin
             }
         })
         .collect()
+}
+
+fn make_progress_bar(length: usize) -> Arc<ProgressBar> {
+    Arc::new(ProgressBar::new(length as u64).with_style(
+        ProgressStyle::with_template("[{elapsed_precise}] {wide_bar} {human_pos}/{human_len} ({percent}%) [{eta_precise}]").unwrap())
+    )
 }
 
 fn calculate_percentage<T>(first: T, second: T) -> Option<f64>
