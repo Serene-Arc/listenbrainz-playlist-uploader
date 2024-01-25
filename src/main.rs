@@ -191,7 +191,10 @@ async fn main() {
             };
             info!("Found a duplicate playlist, enacting duplicate policy");
             match args.duplicate_action {
-                DuplicateAction::None => {}
+                DuplicateAction::None => {
+                    // Just submit new playlist
+                    submit_new_playlist(args.public, &token, &musicbrainz_ids, playlist_name).await;
+                }
                 DuplicateAction::Overwrite => {
                     if p.number_of_tracks > 0 {
                         let deletion_request =
@@ -233,6 +236,7 @@ async fn main() {
                         }
                         playlist_name = prospective_title;
                     }
+                    submit_new_playlist(args.public, &token, &musicbrainz_ids, playlist_name).await;
                 }
                 DuplicateAction::Abort => {
                     error!("Duplicate action says to abort!");
@@ -242,23 +246,32 @@ async fn main() {
         }
         None => {
             info!("No duplicate playlists found");
+            submit_new_playlist(args.public, &token, &musicbrainz_ids, playlist_name).await;
         }
     }
 
-    debug!("Submitting new playlist");
-    match playlist::submit_playlist(&token, &musicbrainz_ids, playlist_name, args.public).await {
-        Ok(r) => {
-            info!("Playlist created with ID {}", r.playlist_mbid);
-        }
-        Err(e) => {
-            error!("Could not create playlist: {}", e);
-        }
-    }
     match args.feedback {
         None => {}
         Some(f) => {
             info!("Sending feedback for songs in playlist...");
             give_feedback_on_all_songs(&musicbrainz_ids, &token, f).await;
+        }
+    }
+}
+
+async fn submit_new_playlist(
+    public: bool,
+    token: &String,
+    musicbrainz_ids: &Vec<String>,
+    playlist_name: String,
+) {
+    debug!("Submitting new playlist");
+    match playlist::submit_playlist(token, musicbrainz_ids, playlist_name, public).await {
+        Ok(r) => {
+            info!("Playlist created with ID {}", r.playlist_mbid);
+        }
+        Err(e) => {
+            error!("Could not create playlist: {}", e);
         }
     }
 }
