@@ -222,7 +222,6 @@ async fn main() {
                     match insertion_request {
                         Ok(()) => {
                             info!("Replaced songs in playlist with ID {}", p.identifier);
-                            exit(0)
                         }
                         Err(e) => {
                             error!("Could not insert new items into playlist: {}", e);
