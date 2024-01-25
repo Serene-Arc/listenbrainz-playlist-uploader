@@ -2,7 +2,7 @@ mod audio_data;
 mod playlist;
 
 use crate::playlist::{
-    delete_item_from_playlist, get_current_playlists, get_current_user, mass_add_to_playlist,
+    delete_items_from_playlist, get_current_playlists, get_current_user, mass_add_to_playlist,
     FullExistingPlaylistResponse,
 };
 use anyhow::{Error, Result};
@@ -197,7 +197,7 @@ async fn main() {
                 }
                 DuplicateAction::Overwrite => {
                     if p.number_of_tracks > 0 {
-                        let deletion_request = delete_item_from_playlist(
+                        let deletion_request = delete_items_from_playlist(
                             &token,
                             &p.identifier,
                             0,

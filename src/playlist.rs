@@ -197,7 +197,7 @@ async fn get_full_specific_playlist(
     Ok(playlist_objects)
 }
 
-pub async fn delete_item_from_playlist(
+pub async fn delete_items_from_playlist(
     token: &String,
     playlist_id: &String,
     start_index: usize,
