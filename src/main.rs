@@ -197,8 +197,13 @@ async fn main() {
                 }
                 DuplicateAction::Overwrite => {
                     if p.number_of_tracks > 0 {
-                        let deletion_request =
-                            delete_item_from_playlist(&token, &p.identifier, 0, 9999).await;
+                        let deletion_request = delete_item_from_playlist(
+                            &token,
+                            &p.identifier,
+                            0,
+                            p.number_of_tracks + 1,
+                        )
+                        .await;
                         match deletion_request {
                             Ok(()) => {}
                             Err(e) => {
