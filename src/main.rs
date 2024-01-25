@@ -1,4 +1,5 @@
 mod audio_data;
+mod paginator;
 mod playlist;
 
 use crate::playlist::{
