@@ -86,12 +86,9 @@ async fn main() {
         exit(1);
     }
 
-    let token = match settings.get_string("user_token") {
-        Ok(t) => t,
-        Err(_) => {
-            error!("Configuration does not contain a token!");
-            exit(1);
-        }
+    let Ok(token) = settings.get_string("user_token") else {
+        error!("Configuration does not contain a token!");
+        exit(1)
     };
 
     debug!("Testing token by resolving to user");
@@ -119,7 +116,7 @@ async fn main() {
         .flat_map(audio_data::load_tags_from_file_path)
         .collect();
     let number_of_tagged_songs = song_data.len();
-    let percentage = calculate_percentage(number_of_tagged_songs, number_of_files)
+    let percentage = calculate_percentage(&number_of_tagged_songs, &number_of_files)
         .expect("Could not calculate percentage of tagged songs");
     info!(
         "{}/{} ({:.2}%) of songs had readable tags",
@@ -135,30 +132,27 @@ async fn main() {
     let musicbrainz_ids = resolve_all_songs_for_mbids(song_data).await;
 
     let number_of_resolved_songs = musicbrainz_ids.len();
-    let percentage = calculate_percentage(number_of_resolved_songs, number_of_tagged_songs)
+    let percentage = calculate_percentage(&number_of_resolved_songs, &number_of_tagged_songs)
         .expect("Could not calculate percentage of resolved songs");
     info!(
         "{}/{} ({:.2}%) of songs were resolved",
         number_of_resolved_songs, number_of_tagged_songs, percentage,
     );
 
-    match args.no_confirm {
-        true => {}
-        false => {
-            match Confirm::new("Do you want to continue with the matched songs?")
-                .with_default(true)
-                .prompt()
-            {
-                Ok(true) => {
-                    info!("Continuing");
-                }
-                Ok(false) => {
-                    info!("Aborting");
-                    exit(1)
-                }
-                Err(_) => {
-                    error!("Error with questionaire");
-                }
+    if !args.no_confirm {
+        match Confirm::new("Do you want to continue with the matched songs?")
+            .with_default(true)
+            .prompt()
+        {
+            Ok(true) => {
+                info!("Continuing");
+            }
+            Ok(false) => {
+                info!("Aborting");
+                exit(1)
+            }
+            Err(_) => {
+                error!("Error with questionaire");
             }
         }
     }
@@ -203,7 +197,7 @@ async fn main() {
                         let deletion_request =
                             delete_item_from_playlist(&token, &p.identifier, 0, 9999).await;
                         match deletion_request {
-                            Ok(_) => {}
+                            Ok(()) => {}
                             Err(e) => {
                                 error!(
                                     "Could not delete items from playlist to overwrite it: {}",
@@ -218,7 +212,7 @@ async fn main() {
                     let insertion_request =
                         mass_add_to_playlist(&token, &p.identifier, &musicbrainz_ids).await;
                     match insertion_request {
-                        Ok(_) => {
+                        Ok(()) => {
                             info!("Replaced songs in playlist with ID {}", p.identifier);
                             exit(0)
                         }
@@ -236,9 +230,8 @@ async fn main() {
                             .any(|p| p.title == prospective_title)
                         {
                             continue;
-                        } else {
-                            playlist_name = prospective_title;
                         }
+                        playlist_name = prospective_title;
                     }
                 }
                 DuplicateAction::Abort => {
@@ -248,7 +241,7 @@ async fn main() {
             }
         }
         None => {
-            info!("No duplicate playlists found")
+            info!("No duplicate playlists found");
         }
     }
 
@@ -348,7 +341,7 @@ fn make_progress_bar(length: usize) -> Arc<ProgressBar> {
     )
 }
 
-fn calculate_percentage<T>(first: T, second: T) -> Option<f64>
+fn calculate_percentage<T>(first: &T, second: &T) -> Option<f64>
 where
     T: ToPrimitive,
 {

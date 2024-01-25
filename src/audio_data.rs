@@ -110,7 +110,7 @@ pub fn load_tags_from_file_path(playlist_entries: PathBuf) -> Result<AudioFileDa
     Ok(AudioFileData {
         artist,
         title,
-        album: if !album.is_empty() { Some(album) } else { None },
+        album: if album.is_empty() { None } else { Some(album) },
     })
 }
 

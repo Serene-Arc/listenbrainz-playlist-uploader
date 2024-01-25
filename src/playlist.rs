@@ -46,12 +46,12 @@ impl SimpleExistingPlaylistResponse {
                 let title = playlist_data["playlist"]["title"].as_str().unwrap();
                 playlists.push(SimpleExistingPlaylistResponse {
                     title: title.to_string(),
-                    identifier: identifier
+                    identifier: (*identifier
                         .rsplit('/')
                         .collect::<Vec<&str>>()
                         .first()
-                        .unwrap()
-                        .to_string(),
+                        .unwrap())
+                    .to_string(),
                 });
             }
         }
@@ -68,12 +68,12 @@ impl FullExistingPlaylistResponse {
         let number_of_tracks = data["playlist"]["track"].as_array().unwrap().len();
         Ok(FullExistingPlaylistResponse {
             title: title.to_string(),
-            identifier: identifier
+            identifier: (*identifier
                 .rsplit('/')
                 .collect::<Vec<&str>>()
                 .first()
-                .unwrap()
-                .to_string(),
+                .unwrap())
+            .to_string(),
             number_of_tracks,
         })
     }
@@ -184,8 +184,7 @@ async fn get_full_specific_playlist(
     playlist_id: &String,
 ) -> Result<FullExistingPlaylistResponse> {
     let url = Url::parse(&format!(
-        "https://api.listenbrainz.org/1/playlist/{}",
-        playlist_id
+        "https://api.listenbrainz.org/1/playlist/{playlist_id}"
     ))?;
     let client = reqwest::Client::new();
     let response = client
@@ -205,15 +204,14 @@ pub async fn delete_item_from_playlist(
     count_to_remove: usize,
 ) -> Result<()> {
     let url = Url::parse(&format!(
-        "https://api.listenbrainz.org/1/playlist/{}/item/delete",
-        playlist_id,
+        "https://api.listenbrainz.org/1/playlist/{playlist_id}/item/delete",
     ))?;
-    debug!("Deleting tracks from playlist with URL '{}'", &url);
+    debug!("Deleting tracks from playlist with URL '{url}'");
     let client = reqwest::Client::new();
     let data = HashMap::from([("index", start_index), ("count", count_to_remove)]);
     let response = client
         .post(url)
-        .header(AUTHORIZATION, format!("Token {}", token))
+        .header(AUTHORIZATION, format!("Token {token}"))
         .json(&data)
         .send()
         .await;
@@ -227,7 +225,7 @@ pub async fn mass_add_to_playlist(
     track_mbids: &[String],
 ) -> Result<()> {
     for chunk in track_mbids.chunks(100) {
-        add_items_to_playlist(token, playlist_id, chunk).await?
+        add_items_to_playlist(token, playlist_id, chunk).await?;
     }
     Ok(())
 }
@@ -238,8 +236,7 @@ pub async fn add_items_to_playlist(
     track_mbids: &[String],
 ) -> Result<()> {
     let url = Url::parse(&format!(
-        "https://api.listenbrainz.org/1/playlist/{}/item/add/0",
-        playlist_id,
+        "https://api.listenbrainz.org/1/playlist/{playlist_id}/item/add/0",
     ))?;
     debug!("Inserting tracks to playlist with URL '{}'", &url);
     let client = reqwest::Client::new();
@@ -250,7 +247,7 @@ pub async fn add_items_to_playlist(
     };
     let response = client
         .post(url)
-        .header(AUTHORIZATION, format!("Token {}", token))
+        .header(AUTHORIZATION, format!("Token {token}"))
         .json(&data)
         .send()
         .await;
