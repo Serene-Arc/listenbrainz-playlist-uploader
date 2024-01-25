@@ -185,7 +185,7 @@ async fn main() {
                         "Could not find more detailed information on possible duplicate playlist: {}",
                         e
                     );
-                    exit(0)
+                    exit(1)
                 }
                 Ok(p) => p,
             };
