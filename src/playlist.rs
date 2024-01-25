@@ -164,10 +164,10 @@ pub async fn get_current_playlists(
     token: &String,
     user_name: &String,
 ) -> Result<Vec<SimpleExistingPlaylistResponse>> {
-    // TODO: Add pagination parsing
-    let url = Url::parse(&format!(
-        "https://api.listenbrainz.org/1/user/{user_name}/playlists"
-    ))?;
+    let url = Url::parse_with_params(
+        &format!("https://api.listenbrainz.org/1/user/{user_name}/playlists"),
+        [("count", u32::MAX.to_string())],
+    )?;
     let client = reqwest::Client::new();
     let response = client
         .get(url)
