@@ -78,7 +78,8 @@ mod test {
 
     #[test]
     fn test_get_existing_feedback() {
-        let result = get_existing_feedback("Serene-Arc", Feedback::Love);
+        let mut test_client = ListenbrainzClient::new("".to_string());
+        let result = get_existing_feedback(&mut test_client, "Serene-Arc", Feedback::Love);
         let rt = tokio::runtime::Runtime::new().unwrap();
         let result = rt.block_on(async { result.await }).unwrap();
         // Magic number for me specifically; I know I have more than 100 favourites

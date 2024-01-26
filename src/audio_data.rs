@@ -141,8 +141,13 @@ mod test {
             title: "Perfect".parse().unwrap(),
             album: Some("Divide".to_string()),
         };
+        let mut test_client = ListenbrainzClient::new("".to_string());
         let rt = tokio::runtime::Runtime::new().unwrap();
-        let result = rt.block_on(async { get_musicbrainz_id_for_audio_data(test).await.unwrap() });
+        let result = rt.block_on(async {
+            get_musicbrainz_id_for_audio_data(&mut test_client, test)
+                .await
+                .unwrap()
+        });
         assert_eq!(result, "b84dd2d1-2bf1-4fcc-aadc-6cc39c36ba35");
     }
 
@@ -153,8 +158,13 @@ mod test {
             title: "Dancing with Your Ghost".parse().unwrap(),
             album: None,
         };
+        let mut test_client = ListenbrainzClient::new("".to_string());
         let rt = tokio::runtime::Runtime::new().unwrap();
-        let result = rt.block_on(async { get_musicbrainz_id_for_audio_data(test).await.unwrap() });
+        let result = rt.block_on(async {
+            get_musicbrainz_id_for_audio_data(&mut test_client, test)
+                .await
+                .unwrap()
+        });
         assert_eq!(result, "9ae71082-ac47-4b9c-a12b-a67fff75784a");
     }
 
@@ -165,8 +175,13 @@ mod test {
             title: "光あれ".parse().unwrap(),
             album: Some("光あれ".parse().unwrap()),
         };
+        let mut test_client = ListenbrainzClient::new("".to_string());
         let rt = tokio::runtime::Runtime::new().unwrap();
-        let result = rt.block_on(async { get_musicbrainz_id_for_audio_data(test).await.unwrap() });
+        let result = rt.block_on(async {
+            get_musicbrainz_id_for_audio_data(&mut test_client, test)
+                .await
+                .unwrap()
+        });
         assert_eq!(result, "5d93f99e-6663-4e77-97f1-0835f6b96b00");
     }
 
@@ -177,8 +192,13 @@ mod test {
             title: "Perfect Duet".parse().unwrap(),
             album: None,
         };
+        let mut test_client = ListenbrainzClient::new("".to_string());
         let rt = tokio::runtime::Runtime::new().unwrap();
-        let result = rt.block_on(async { get_musicbrainz_id_for_audio_data(test).await.unwrap() });
+        let result = rt.block_on(async {
+            get_musicbrainz_id_for_audio_data(&mut test_client, test)
+                .await
+                .unwrap()
+        });
         assert_eq!(result, "764f4c40-1c16-44a7-a6e6-b8c426604b57");
     }
 
@@ -189,8 +209,13 @@ mod test {
             title: "Never Let Me Go".parse().unwrap(),
             album: None,
         };
+        let mut test_client = ListenbrainzClient::new("".to_string());
         let rt = tokio::runtime::Runtime::new().unwrap();
-        let result = rt.block_on(async { get_musicbrainz_id_for_audio_data(test).await.unwrap() });
+        let result = rt.block_on(async {
+            get_musicbrainz_id_for_audio_data(&mut test_client, test)
+                .await
+                .unwrap()
+        });
         assert_eq!(result, "589b2eff-e541-475b-bbe7-ca778238e711");
     }
 
@@ -201,8 +226,13 @@ mod test {
             title: "As I Am".parse().unwrap(),
             album: None,
         };
+        let mut test_client = ListenbrainzClient::new("".to_string());
         let rt = tokio::runtime::Runtime::new().unwrap();
-        let result = rt.block_on(async { get_musicbrainz_id_for_audio_data(test).await.unwrap() });
+        let result = rt.block_on(async {
+            get_musicbrainz_id_for_audio_data(&mut test_client, test)
+                .await
+                .unwrap()
+        });
         assert_eq!(result, "4f8268ae-8db1-42a7-baca-b1a0b0b879c4");
     }
 
@@ -213,8 +243,13 @@ mod test {
             title: "Dancing with Your Ghost".parse().unwrap(),
             album: None,
         };
+        let mut test_client = ListenbrainzClient::new("".to_string());
         let rt = tokio::runtime::Runtime::new().unwrap();
-        let result = rt.block_on(async { get_musicbrainz_id_for_audio_data(test).await.unwrap() });
+        let result = rt.block_on(async {
+            get_musicbrainz_id_for_audio_data(&mut test_client, test)
+                .await
+                .unwrap()
+        });
         assert_eq!(result, "9ae71082-ac47-4b9c-a12b-a67fff75784a");
     }
 
@@ -226,8 +261,13 @@ mod test {
             title: "Asdjkhfgds".parse().unwrap(),
             album: None,
         };
+        let mut test_client = ListenbrainzClient::new("".to_string());
         let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(async { get_musicbrainz_id_for_audio_data(test).await.unwrap() });
+        rt.block_on(async {
+            get_musicbrainz_id_for_audio_data(&mut test_client, test)
+                .await
+                .unwrap()
+        });
     }
 
     #[test]
