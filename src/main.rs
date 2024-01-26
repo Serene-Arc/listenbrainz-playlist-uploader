@@ -5,6 +5,7 @@ mod paginator;
 mod playlist;
 
 use crate::feedback::get_existing_feedback;
+use crate::listenbrainz_client::ListenbrainzClient;
 use crate::playlist::{
     delete_items_from_playlist, get_current_playlists, get_current_user, mass_add_to_playlist,
     FullExistingPlaylistResponse,
@@ -16,7 +17,6 @@ use clap_verbosity_flag::{InfoLevel, Verbosity};
 use config::Config;
 use futures::stream::FuturesUnordered;
 use futures::{FutureExt, StreamExt};
-use governor::{Quota, RateLimiter};
 use indicatif::{ProgressBar, ProgressStyle};
 use inquire::Confirm;
 use log::{debug, error, info};
@@ -25,7 +25,7 @@ use num_traits::ToPrimitive;
 use std::path::PathBuf;
 use std::process::exit;
 use std::sync::Arc;
-use std::time::Duration;
+use tokio::sync::Mutex;
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -93,8 +93,10 @@ async fn main() {
         exit(1)
     };
 
+    let mut client = ListenbrainzClient::new(token);
+
     debug!("Testing token by resolving to user");
-    let user_name = match get_current_user(&token).await {
+    let user_name = match get_current_user(&mut client).await {
         Ok(s) => s,
         Err(e) => {
             error!("Could not resolve token successfully: {}", e);
@@ -131,7 +133,7 @@ async fn main() {
     }
 
     info!("Resolving song tags to Musicbrainz IDs...");
-    let musicbrainz_ids = resolve_all_songs_for_mbids(song_data).await;
+    let musicbrainz_ids = resolve_all_songs_for_mbids(&mut client, song_data).await;
 
     let number_of_resolved_songs = musicbrainz_ids.len();
     let percentage = calculate_percentage(&number_of_resolved_songs, &number_of_tagged_songs)
@@ -160,7 +162,7 @@ async fn main() {
     }
 
     debug!("Retrieving existing playlists");
-    let current_playlists = match get_current_playlists(&token, &user_name).await {
+    let current_playlists = match get_current_playlists(&mut client, &user_name).await {
         Ok(playlists) => playlists,
         Err(e) => {
             error!("Could not retrieve existing playlists: {}", e);
@@ -178,7 +180,8 @@ async fn main() {
     match searched_playlist {
         Some(p) => {
             let p = match FullExistingPlaylistResponse::convert_simple_playlist_response_to_full(
-                &token, p,
+                &mut client,
+                p,
             )
             .await
             {
@@ -195,12 +198,13 @@ async fn main() {
             match args.duplicate_action {
                 DuplicateAction::None => {
                     // Just submit new playlist
-                    submit_new_playlist(args.public, &token, &musicbrainz_ids, playlist_name).await;
+                    submit_new_playlist(&mut client, args.public, &musicbrainz_ids, playlist_name)
+                        .await;
                 }
                 DuplicateAction::Overwrite => {
                     if p.number_of_tracks > 0 {
                         let deletion_request = delete_items_from_playlist(
-                            &token,
+                            &mut client,
                             &p.identifier,
                             0,
                             p.number_of_tracks + 1,
@@ -220,7 +224,7 @@ async fn main() {
                         debug!("Existing playlist already has no tracks");
                     }
                     let insertion_request =
-                        mass_add_to_playlist(&token, &p.identifier, &musicbrainz_ids).await;
+                        mass_add_to_playlist(&mut client, &p.identifier, &musicbrainz_ids).await;
                     match insertion_request {
                         Ok(()) => {
                             info!("Replaced songs in playlist with ID {}", p.identifier);
@@ -242,7 +246,8 @@ async fn main() {
                         }
                         playlist_name = prospective_title;
                     }
-                    submit_new_playlist(args.public, &token, &musicbrainz_ids, playlist_name).await;
+                    submit_new_playlist(&mut client, args.public, &musicbrainz_ids, playlist_name)
+                        .await;
                 }
                 DuplicateAction::Abort => {
                     error!("Duplicate action says to abort!");
@@ -252,14 +257,14 @@ async fn main() {
         }
         None => {
             info!("No duplicate playlists found");
-            submit_new_playlist(args.public, &token, &musicbrainz_ids, playlist_name).await;
+            submit_new_playlist(&mut client, args.public, &musicbrainz_ids, playlist_name).await;
         }
     }
 
     match args.feedback {
         None => {}
         Some(f) => {
-            let given_feedback = get_existing_feedback(&user_name, f)
+            let given_feedback = get_existing_feedback(&mut client, &user_name, f)
                 .await
                 .expect("Could not get existing feedback");
             let filtered_musicbrainz_ids: Vec<_> = musicbrainz_ids
@@ -281,19 +286,21 @@ async fn main() {
                 );
                 info!("Sending feedback for remaining songs in playlist...");
             }
-            give_feedback_on_all_songs(filtered_musicbrainz_ids, &token, f).await;
+            give_feedback_on_all_songs(&mut client, filtered_musicbrainz_ids, f).await;
         }
     }
 }
 
 async fn submit_new_playlist(
+    listenbrainz_client: &mut ListenbrainzClient,
     public: bool,
-    token: &String,
     musicbrainz_ids: &Vec<String>,
     playlist_name: String,
 ) {
     debug!("Submitting new playlist");
-    match playlist::submit_playlist(token, musicbrainz_ids, playlist_name, public).await {
+    match playlist::submit_playlist(listenbrainz_client, musicbrainz_ids, playlist_name, public)
+        .await
+    {
         Ok(r) => {
             info!("Playlist created with ID {}", r.playlist_mbid);
         }
@@ -304,24 +311,24 @@ async fn submit_new_playlist(
 }
 
 async fn give_feedback_on_all_songs(
+    listenbrainz_client: &mut ListenbrainzClient,
     musicbrainz_ids: Vec<&String>,
-    user_token: &str,
     feedback: Feedback,
 ) {
-    // Be a good internet citizen; this isn't an important application.
-    let rate_limiter = Arc::new(RateLimiter::direct(
-        Quota::with_period(Duration::from_secs(5)).expect("Could not create quota"),
-    ));
-
     let progress_bar = make_progress_bar(musicbrainz_ids.len());
+    let listenbrainz_client = Arc::new(Mutex::new(listenbrainz_client));
     let futures: FuturesUnordered<_> = musicbrainz_ids
         .iter()
         .map(|mbid| {
-            let limiter = Arc::clone(&rate_limiter);
             let pb = Arc::clone(&progress_bar);
+            let listenbrainz_client = Arc::clone(&listenbrainz_client);
             async move {
-                limiter.until_ready().await;
-                let out = feedback::give_song_feedback_for_mbid(user_token, mbid, feedback).await;
+                let out = feedback::give_song_feedback_for_mbid(
+                    *listenbrainz_client.lock().await,
+                    mbid,
+                    feedback,
+                )
+                .await;
                 pb.inc(1);
                 out
             }
@@ -339,21 +346,23 @@ async fn give_feedback_on_all_songs(
         }
     }
 }
-async fn resolve_all_songs_for_mbids(song_data: Vec<AudioFileData>) -> Vec<String> {
-    // Be a good internet citizen; this isn't an important application.
-    let rate_limiter = Arc::new(RateLimiter::direct(
-        Quota::with_period(Duration::from_secs(5)).expect("Could not create quota"),
-    ));
-
+async fn resolve_all_songs_for_mbids(
+    listenbrainz_client: &mut ListenbrainzClient,
+    song_data: Vec<AudioFileData>,
+) -> Vec<String> {
     let progress_bar = make_progress_bar(song_data.len());
+    let listenbrainz_client = Arc::new(Mutex::new(listenbrainz_client));
     let futures: FuturesUnordered<_> = song_data
         .into_iter()
         .map(|data| {
-            let limiter = Arc::clone(&rate_limiter);
             let pb = Arc::clone(&progress_bar);
+            let listenbrainz_client = Arc::clone(&listenbrainz_client);
             async move {
-                limiter.until_ready().await;
-                let out = audio_data::get_musicbrainz_id_for_audio_data(data).await;
+                let out = audio_data::get_musicbrainz_id_for_audio_data(
+                    *listenbrainz_client.lock().await,
+                    data,
+                )
+                .await;
                 pb.inc(1);
                 out
             }

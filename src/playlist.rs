@@ -1,6 +1,6 @@
+use crate::listenbrainz_client::ListenbrainzClient;
 use anyhow::{anyhow, Error, Result};
 use log::debug;
-use reqwest::header::AUTHORIZATION;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize, Serializer};
 use serde_json::{Map, Value};
@@ -78,10 +78,10 @@ impl FullExistingPlaylistResponse {
         })
     }
     pub async fn convert_simple_playlist_response_to_full(
-        token: &String,
+        listenbrainz_client: &mut ListenbrainzClient,
         simple_playlist: &SimpleExistingPlaylistResponse,
     ) -> Result<Self> {
-        get_full_specific_playlist(token, &simple_playlist.identifier).await
+        get_full_specific_playlist(listenbrainz_client, &simple_playlist.identifier).await
     }
 }
 impl Serialize for SubmissionPlaylist<'_> {
@@ -124,33 +124,35 @@ impl Serialize for SubmissionPlaylist<'_> {
 }
 
 pub async fn submit_playlist(
-    user_token: &String,
+    listenbrainz_client: &mut ListenbrainzClient,
     mbid_vec: &Vec<String>,
     playlist_name: String,
     public_playlist: bool,
 ) -> Result<PlaylistSubmissionResponse> {
-    let client = reqwest::Client::new();
     let data = SubmissionPlaylist {
         name: playlist_name,
         public: public_playlist,
         song_mbids: mbid_vec,
     };
-    let response = client
-        .post("https://api.listenbrainz.org/1/playlist/create")
-        .header(AUTHORIZATION, format!("Token {user_token}"))
-        .json(&data)
-        .send()
+    let response = listenbrainz_client
+        .take_request_builder(
+            listenbrainz_client
+                .request_client
+                .post("https://api.listenbrainz.org/1/playlist/create")
+                .json(&data),
+        )
         .await?;
     let playlist_id = response.json::<PlaylistSubmissionResponse>().await?;
     Ok(playlist_id)
 }
 
-pub async fn get_current_user(user_token: &String) -> Result<String> {
-    let client = reqwest::Client::new();
-    let response = client
-        .get("https://api.listenbrainz.org/1/validate-token")
-        .header(AUTHORIZATION, format!("Token {user_token}"))
-        .send()
+pub async fn get_current_user(listenbrainz_client: &mut ListenbrainzClient) -> Result<String> {
+    let response = listenbrainz_client
+        .take_request_builder(
+            listenbrainz_client
+                .request_client
+                .get("https://api.listenbrainz.org/1/validate-token"),
+        )
         .await?;
     let response_text = response.text().await?;
     let response: ValidationResponse = serde_json::from_str(response_text.as_str())?;
@@ -161,18 +163,15 @@ pub async fn get_current_user(user_token: &String) -> Result<String> {
 }
 
 pub async fn get_current_playlists(
-    token: &String,
+    listenbrainz_client: &mut ListenbrainzClient,
     user_name: &String,
 ) -> Result<Vec<SimpleExistingPlaylistResponse>> {
     let url = Url::parse_with_params(
         &format!("https://api.listenbrainz.org/1/user/{user_name}/playlists"),
         [("count", u32::MAX.to_string())],
     )?;
-    let client = reqwest::Client::new();
-    let response = client
-        .get(url)
-        .header(AUTHORIZATION, format!("Token {token}"))
-        .send()
+    let response = listenbrainz_client
+        .take_request_builder(listenbrainz_client.request_client.get(url))
         .await;
     let response_text = response?.text().await?;
     let playlist_objects = SimpleExistingPlaylistResponse::from_json(response_text.as_str())?;
@@ -180,17 +179,14 @@ pub async fn get_current_playlists(
 }
 
 async fn get_full_specific_playlist(
-    token: &String,
+    listenbrainz_client: &mut ListenbrainzClient,
     playlist_id: &String,
 ) -> Result<FullExistingPlaylistResponse> {
     let url = Url::parse(&format!(
         "https://api.listenbrainz.org/1/playlist/{playlist_id}"
     ))?;
-    let client = reqwest::Client::new();
-    let response = client
-        .get(url)
-        .header(AUTHORIZATION, format!("Token {token}"))
-        .send()
+    let response = listenbrainz_client
+        .take_request_builder(listenbrainz_client.request_client.get(url))
         .await;
     let response_text = response?.text().await?;
     let playlist_objects = FullExistingPlaylistResponse::from_json(response_text.as_str())?;
@@ -198,7 +194,7 @@ async fn get_full_specific_playlist(
 }
 
 pub async fn delete_items_from_playlist(
-    token: &String,
+    listenbrainz_client: &mut ListenbrainzClient,
     playlist_id: &String,
     start_index: usize,
     count_to_remove: usize,
@@ -207,31 +203,27 @@ pub async fn delete_items_from_playlist(
         "https://api.listenbrainz.org/1/playlist/{playlist_id}/item/delete",
     ))?;
     debug!("Deleting tracks from playlist with URL '{url}'");
-    let client = reqwest::Client::new();
     let data = HashMap::from([("index", start_index), ("count", count_to_remove)]);
-    let response = client
-        .post(url)
-        .header(AUTHORIZATION, format!("Token {token}"))
-        .json(&data)
-        .send()
+    let response = listenbrainz_client
+        .take_request_builder(listenbrainz_client.request_client.post(url).json(&data))
         .await;
     let response = response?.status();
     match_error_from_playlist_change(response)
 }
 
 pub async fn mass_add_to_playlist(
-    token: &String,
+    listenbrainz_client: &mut ListenbrainzClient,
     playlist_id: &String,
     track_mbids: &[String],
 ) -> Result<()> {
     for chunk in track_mbids.chunks(100) {
-        add_items_to_playlist(token, playlist_id, chunk).await?;
+        add_items_to_playlist(listenbrainz_client, playlist_id, chunk).await?;
     }
     Ok(())
 }
 
 pub async fn add_items_to_playlist(
-    token: &String,
+    listenbrainz_client: &mut ListenbrainzClient,
     playlist_id: &String,
     track_mbids: &[String],
 ) -> Result<()> {
@@ -239,17 +231,13 @@ pub async fn add_items_to_playlist(
         "https://api.listenbrainz.org/1/playlist/{playlist_id}/item/add/0",
     ))?;
     debug!("Inserting tracks to playlist with URL '{}'", &url);
-    let client = reqwest::Client::new();
     let data = SubmissionPlaylist {
         name: "addition".to_string(),
         public: false,
         song_mbids: track_mbids,
     };
-    let response = client
-        .post(url)
-        .header(AUTHORIZATION, format!("Token {token}"))
-        .json(&data)
-        .send()
+    let response = listenbrainz_client
+        .take_request_builder(listenbrainz_client.request_client.post(url).json(&data))
         .await;
     let response = response?.status();
     match_error_from_playlist_change(response)

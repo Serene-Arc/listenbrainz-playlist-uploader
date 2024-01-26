@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use governor::{DefaultDirectRateLimiter, Quota, RateLimiter};
 use log::warn;
 use reqwest::header::AUTHORIZATION;
@@ -15,7 +15,7 @@ pub struct ListenbrainzClient {
 }
 
 impl ListenbrainzClient {
-    pub fn new(user_token: &str) -> Self {
+    pub fn new(user_token: String) -> Self {
         ListenbrainzClient {
             request_client: Client::new(),
             user_token: user_token.to_string(),

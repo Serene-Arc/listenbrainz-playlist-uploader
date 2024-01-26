@@ -1,7 +1,7 @@
+use crate::listenbrainz_client::ListenbrainzClient;
 use crate::paginator::ListenbrainzPaginator;
 use crate::Feedback;
-use anyhow::{Error, Result};
-use reqwest::header::AUTHORIZATION;
+use anyhow::Result;
 use serde::Deserialize;
 use serde_json::json;
 use std::collections::HashSet;
@@ -20,36 +20,42 @@ struct FeedbackResponseWrapper {
 }
 
 pub async fn give_song_feedback_for_mbid(
-    user_token: &str,
+    listenbrainz_client: &mut ListenbrainzClient,
     mbid: &str,
     feedback: Feedback,
-) -> anyhow::Result<()> {
-    let client = reqwest::Client::new();
+) -> Result<()> {
     let parameters = json!({"recording_mbid": mbid,"score": &(feedback as i8).to_string(),});
-    let response = client
-        .post("https://api.listenbrainz.org/1/feedback/recording-feedback")
-        .header(AUTHORIZATION, format!("Token {user_token}"))
-        .json(&parameters)
-        .send()
+    let response = listenbrainz_client
+        .take_request_builder(
+            listenbrainz_client
+                .request_client
+                .post("https://api.listenbrainz.org/1/feedback/recording-feedback")
+                .json(&parameters),
+        )
         .await;
     match response {
         Ok(_) => Ok(()),
-        Err(e) => Err(Error::from(e)),
+        Err(e) => Err(e),
     }
 }
 
-pub async fn get_existing_feedback(user_name: &str, feedback: Feedback) -> Result<HashSet<String>> {
+pub async fn get_existing_feedback(
+    listenbrainz_client: &mut ListenbrainzClient,
+    user_name: &str,
+    feedback: Feedback,
+) -> Result<HashSet<String>> {
     let mut all_feedback = HashSet::new();
     for url in ListenbrainzPaginator::new(
         &format!("https://api.listenbrainz.org/1/feedback/user/{user_name}/get-feedback"),
         0,
         1000,
     ) {
-        let client = reqwest::Client::new();
         let real_url =
             Url::parse_with_params(url.as_ref(), [("score", (feedback as i8).to_string())])
                 .expect("Could not construct url");
-        let response = client.get(real_url).send().await?;
+        let response = listenbrainz_client
+            .take_request_builder(listenbrainz_client.request_client.get(real_url))
+            .await?;
         let response_text = response.text().await?;
         let feedback_response: FeedbackResponseWrapper =
             serde_json::from_str(response_text.as_str())?;

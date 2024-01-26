@@ -1,3 +1,4 @@
+use crate::listenbrainz_client::ListenbrainzClient;
 use anyhow::{anyhow, Result};
 use audiotags::Tag;
 use cached::proc_macro::cached;
@@ -20,15 +21,26 @@ pub struct ArtistData {
     pub mbid: Option<String>,
 }
 
-pub async fn get_musicbrainz_id_for_audio_data(audio_file_data: AudioFileData) -> Result<String> {
-    let mut result =
-        make_listenbrainz_lookup_request(&audio_file_data.title, &audio_file_data.artist).await?;
+pub async fn get_musicbrainz_id_for_audio_data(
+    listenbrainz_client: &mut ListenbrainzClient,
+    audio_file_data: AudioFileData,
+) -> Result<String> {
+    let mut result = make_listenbrainz_lookup_request(
+        listenbrainz_client,
+        &audio_file_data.title,
+        &audio_file_data.artist,
+    )
+    .await?;
 
     if result.as_object().unwrap().is_empty() {
         // Attempt to resolve artist and try that, it might be an alias
         let artist = get_artist_mbid(audio_file_data.artist.clone()).await;
-        result =
-            make_listenbrainz_lookup_request(&audio_file_data.title, &artist.artist_tag).await?;
+        result = make_listenbrainz_lookup_request(
+            listenbrainz_client,
+            &audio_file_data.title,
+            &artist.artist_tag,
+        )
+        .await?;
     }
 
     if result.as_object().unwrap().is_empty() {
@@ -43,12 +55,17 @@ pub async fn get_musicbrainz_id_for_audio_data(audio_file_data: AudioFileData) -
     Ok(out.to_string())
 }
 
-async fn make_listenbrainz_lookup_request(title: &String, artist: &String) -> Result<Value> {
+async fn make_listenbrainz_lookup_request(
+    listenbrainz_client: &mut ListenbrainzClient,
+    title: &String,
+    artist: &String,
+) -> Result<Value> {
     let request_url: Url = Url::parse_with_params(
         "https://api.listenbrainz.org/1/metadata/lookup/",
         &[("artist_name", artist), ("recording_name", title)],
     )?;
-    let result = reqwest::get(request_url)
+    let result = listenbrainz_client
+        .take_request_builder(listenbrainz_client.request_client.get(request_url))
         .await?
         .error_for_status()?
         .json::<Value>()
