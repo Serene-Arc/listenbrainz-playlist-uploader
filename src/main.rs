@@ -1,12 +1,14 @@
 mod audio_data;
+mod feedback;
 mod paginator;
 mod playlist;
 
+use crate::feedback::get_existing_feedback;
 use crate::playlist::{
     delete_items_from_playlist, get_current_playlists, get_current_user, mass_add_to_playlist,
     FullExistingPlaylistResponse,
 };
-use anyhow::{Error, Result};
+use anyhow::Result;
 use audio_data::AudioFileData;
 use clap::{Parser, ValueEnum};
 use clap_verbosity_flag::{InfoLevel, Verbosity};
@@ -19,8 +21,6 @@ use inquire::Confirm;
 use log::{debug, error, info};
 use m3u::Entry;
 use num_traits::ToPrimitive;
-use reqwest::header::AUTHORIZATION;
-use serde_json::json;
 use std::path::PathBuf;
 use std::process::exit;
 use std::sync::Arc;
@@ -258,8 +258,29 @@ async fn main() {
     match args.feedback {
         None => {}
         Some(f) => {
-            info!("Sending feedback for songs in playlist...");
-            give_feedback_on_all_songs(&musicbrainz_ids, &token, f).await;
+            let given_feedback = get_existing_feedback(&user_name, f)
+                .await
+                .expect("Could not get existing feedback");
+            let filtered_musicbrainz_ids: Vec<_> = musicbrainz_ids
+                .iter()
+                .filter(|i| !given_feedback.contains(*i))
+                .collect();
+            let filtered_len = filtered_musicbrainz_ids.len();
+            let total_len = musicbrainz_ids.len();
+            let percentage = calculate_percentage(&filtered_len, &total_len).unwrap();
+            if filtered_len == 0 {
+                info!("All songs in playlist already have the correct feedback");
+                exit(0)
+            } else if filtered_len == total_len {
+                info!("Sending feedback for songs in playlist...");
+            } else {
+                info!(
+                    "{}/{} ({:.2}%) of songs already have the correct feedback",
+                    filtered_len, total_len, percentage
+                );
+                info!("Sending feedback for remaining songs in playlist...");
+            }
+            give_feedback_on_all_songs(filtered_musicbrainz_ids, &token, f).await;
         }
     }
 }
@@ -282,8 +303,8 @@ async fn submit_new_playlist(
 }
 
 async fn give_feedback_on_all_songs(
-    musicbrainz_ids: &Vec<String>,
-    user_token: &String,
+    musicbrainz_ids: Vec<&String>,
+    user_token: &str,
     feedback: Feedback,
 ) {
     // Be a good internet citizen; this isn't an important application.
@@ -299,7 +320,7 @@ async fn give_feedback_on_all_songs(
             let pb = Arc::clone(&progress_bar);
             async move {
                 limiter.until_ready().await;
-                let out = give_song_feedback_for_mbid(user_token, mbid, feedback).await;
+                let out = feedback::give_song_feedback_for_mbid(user_token, mbid, feedback).await;
                 pb.inc(1);
                 out
             }
@@ -359,11 +380,11 @@ fn make_progress_bar(length: usize) -> Arc<ProgressBar> {
     )
 }
 
-fn calculate_percentage<T>(first: &T, second: &T) -> Option<f64>
+fn calculate_percentage<T>(numerator: &T, denominator: &T) -> Option<f64>
 where
     T: ToPrimitive,
 {
-    match (first.to_f64(), second.to_f64()) {
+    match (numerator.to_f64(), denominator.to_f64()) {
         (Some(first), Some(second)) if second != 0.0 => Some((first / second) * 100.0),
         _ => None,
     }
@@ -380,25 +401,6 @@ fn load_file_paths(file_path: &PathBuf) -> Vec<PathBuf> {
         })
         .collect();
     playlist_entries
-}
-
-async fn give_song_feedback_for_mbid(
-    user_token: &String,
-    mbid: &String,
-    feedback: Feedback,
-) -> Result<()> {
-    let client = reqwest::Client::new();
-    let parameters = json!({"recording_mbid": mbid,"score": &(feedback as i8).to_string(),});
-    let response = client
-        .post("https://api.listenbrainz.org/1/feedback/recording-feedback")
-        .header(AUTHORIZATION, format!("Token {user_token}"))
-        .json(&parameters)
-        .send()
-        .await;
-    match response {
-        Ok(_) => Ok(()),
-        Err(e) => Err(Error::from(e)),
-    }
 }
 
 #[cfg(test)]
