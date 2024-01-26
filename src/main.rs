@@ -1,5 +1,6 @@
 mod audio_data;
 mod feedback;
+mod listenbrainz_client;
 mod paginator;
 mod playlist;
 
