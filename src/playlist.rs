@@ -152,8 +152,8 @@ pub async fn get_current_user(user_token: &String) -> Result<String> {
         .header(AUTHORIZATION, format!("Token {user_token}"))
         .send()
         .await?;
-    let test = response.text().await?;
-    let response: ValidationResponse = serde_json::from_str(test.as_str())?;
+    let response_text = response.text().await?;
+    let response: ValidationResponse = serde_json::from_str(response_text.as_str())?;
     match response.code {
         200 => Ok(response.user_name),
         _ => Err(anyhow!("Response was {}", response.code)),
