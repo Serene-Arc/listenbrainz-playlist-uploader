@@ -273,7 +273,8 @@ async fn main() {
                 .collect();
             let filtered_len = filtered_musicbrainz_ids.len();
             let total_len = musicbrainz_ids.len();
-            let percentage = calculate_percentage(&filtered_len, &total_len).unwrap();
+            let correct_len = total_len - filtered_len;
+            let percentage = calculate_percentage(&correct_len, &total_len).unwrap();
             if filtered_len == 0 {
                 info!("All songs in playlist already have the correct feedback");
                 exit(0)
@@ -282,7 +283,7 @@ async fn main() {
             } else {
                 info!(
                     "{}/{} ({:.2}%) of songs already have the correct feedback",
-                    filtered_len, total_len, percentage
+                    correct_len, total_len, percentage
                 );
                 info!("Sending feedback for remaining songs in playlist...");
             }
