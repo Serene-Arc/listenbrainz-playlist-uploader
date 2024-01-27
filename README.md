@@ -6,8 +6,6 @@ Tags are automatically read from the linked files and then matched with an ID th
 
 The token for the Listenbrainz account is required, and must be placed in a `config.toml` file under the key `user_token`. See the example configuration file for details.
 
-There is a rate limit for most of the calls to the Listenbrainz API. This is not an important application so be a good net citizen! The timeout is set to 5 seconds in the code, which is per-song and includes multiple calls to the API. Listenbrainz may rate-limit you themselves (causing a crash) if you change this.
-
 **Usage:** `listenbrainz_playlist_uploader [OPTIONS] <FILE> <PLAYLIST_NAME>`
 
 ### **Arguments:**
