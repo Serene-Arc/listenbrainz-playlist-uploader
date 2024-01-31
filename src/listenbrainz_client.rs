@@ -1,6 +1,6 @@
 use anyhow::Result;
 use governor::{DefaultDirectRateLimiter, Quota, RateLimiter};
-use log::warn;
+use log::debug;
 use reqwest::header::AUTHORIZATION;
 use reqwest::RequestBuilder;
 use reqwest::{Client, Response, StatusCode};
@@ -41,7 +41,7 @@ impl ListenbrainzClient {
         match out {
             Ok(r) => {
                 if r.status() == StatusCode::from_u16(429).unwrap() {
-                    warn!("Rate limiting error found, waiting and retrying");
+                    debug!("Rate limiting error found, waiting and retrying");
                     sleep(Duration::from_secs(15)).await;
                     Ok(request_builder.send().await?)
                 } else {
