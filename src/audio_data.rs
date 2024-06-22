@@ -109,8 +109,8 @@ async fn get_artist_mbid(artist_name: String) -> ArtistData {
     }
 }
 
-pub fn load_tags_from_file_path(playlist_entries: PathBuf) -> Result<AudioFileData> {
-    let tags = Tag::new().read_from_path(playlist_entries)?;
+pub fn load_tags_from_file_path(file: PathBuf) -> Result<AudioFileData> {
+    let tags = Tag::new().read_from_path(file)?;
     let artist = tags
         .artist()
         .ok_or(anyhow!("Could not read artist"))?
