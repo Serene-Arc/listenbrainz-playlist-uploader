@@ -2,6 +2,7 @@ use crate::listenbrainz_client::ListenbrainzClient;
 use anyhow::{anyhow, Result};
 use audiotags::Tag;
 use cached::proc_macro::cached;
+use ffprobe::ffprobe;
 use musicbrainz_rs::entity::artist::{Artist, ArtistSearchQuery};
 use musicbrainz_rs::Search;
 use serde_json::Value;
@@ -13,6 +14,12 @@ pub struct AudioFileData {
     pub artist: String,
     pub title: String,
     pub album: Option<String>,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub enum AudioIDData {
+    Mbid(String),
+    AudioFileData(AudioFileData),
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -109,7 +116,10 @@ async fn get_artist_mbid(artist_name: String) -> ArtistData {
     }
 }
 
-pub fn load_tags_from_file_path(file: PathBuf) -> Result<AudioFileData> {
+pub fn load_tags_from_file_path(file: PathBuf) -> Result<AudioIDData> {
+    if let Ok(mbid) = read_mbid_from_metadata(&file) {
+        return Ok(AudioIDData::Mbid(mbid));
+    }
     let tags = Tag::new().read_from_path(file)?;
     let artist = tags
         .artist()
@@ -124,11 +134,31 @@ pub fn load_tags_from_file_path(file: PathBuf) -> Result<AudioFileData> {
         .ok_or(anyhow!("Could not read album"))?
         .title
         .to_string();
-    Ok(AudioFileData {
+    Ok(AudioIDData::AudioFileData(AudioFileData {
         artist,
         title,
         album: if album.is_empty() { None } else { Some(album) },
-    })
+    }))
+}
+
+pub fn read_mbid_from_metadata(file: &PathBuf) -> Result<String> {
+    let extra = ffprobe(file)?
+        .format
+        .tags
+        .ok_or_else(|| anyhow!("Could not read tags"))?
+        .extra;
+    let keys = vec![
+        "MUSICBRAINZ_TRACKID",
+        "MusicBrainz Release Track Id",
+        "mb_trackid",
+    ];
+
+    for key in keys {
+        if let Some(mbid) = extra.get(key) {
+            return Ok(mbid.to_string());
+        }
+    }
+    Err(anyhow!("Could not find MBID in tags"))
 }
 
 #[cfg(test)]

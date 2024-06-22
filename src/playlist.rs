@@ -30,7 +30,6 @@ pub struct SimpleExistingPlaylistResponse {
 }
 
 pub struct FullExistingPlaylistResponse {
-    pub title: String,
     pub identifier: String,
     pub number_of_tracks: usize,
 }
@@ -64,10 +63,8 @@ impl FullExistingPlaylistResponse {
         let data: Value = serde_json::from_str(json)?;
 
         let identifier = data["playlist"]["identifier"].as_str().unwrap();
-        let title = data["playlist"]["title"].as_str().unwrap();
         let number_of_tracks = data["playlist"]["track"].as_array().unwrap().len();
         Ok(FullExistingPlaylistResponse {
-            title: title.to_string(),
             identifier: (*identifier
                 .rsplit('/')
                 .collect::<Vec<&str>>()

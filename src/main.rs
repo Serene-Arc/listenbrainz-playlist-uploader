@@ -4,6 +4,7 @@ mod listenbrainz_client;
 mod paginator;
 mod playlist;
 
+use crate::audio_data::AudioIDData;
 use crate::feedback::get_existing_feedback;
 use crate::listenbrainz_client::ListenbrainzClient;
 use crate::playlist::{
@@ -11,7 +12,6 @@ use crate::playlist::{
     FullExistingPlaylistResponse,
 };
 use anyhow::Result;
-use audio_data::AudioFileData;
 use clap::{Parser, ValueEnum};
 use clap_verbosity_flag::{InfoLevel, Verbosity};
 use config::Config;
@@ -349,7 +349,7 @@ async fn give_feedback_on_all_songs(
 }
 async fn resolve_all_songs_for_mbids(
     listenbrainz_client: &mut ListenbrainzClient,
-    song_data: Vec<AudioFileData>,
+    song_data: Vec<AudioIDData>,
 ) -> Vec<String> {
     let progress_bar = make_progress_bar(song_data.len());
     let listenbrainz_client = Arc::new(Mutex::new(listenbrainz_client));
@@ -359,11 +359,16 @@ async fn resolve_all_songs_for_mbids(
             let pb = Arc::clone(&progress_bar);
             let listenbrainz_client = Arc::clone(&listenbrainz_client);
             async move {
-                let out = audio_data::get_musicbrainz_id_for_audio_data(
-                    *listenbrainz_client.lock().await,
-                    data,
-                )
-                .await;
+                let out = match data {
+                    AudioIDData::Mbid(mbid) => Ok(mbid),
+                    AudioIDData::AudioFileData(d) => {
+                        audio_data::get_musicbrainz_id_for_audio_data(
+                            *listenbrainz_client.lock().await,
+                            d,
+                        )
+                        .await
+                    }
+                };
                 pb.inc(1);
                 out
             }
