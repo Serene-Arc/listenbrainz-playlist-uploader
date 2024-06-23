@@ -12,6 +12,18 @@ The token for the Listenbrainz account is required, and must be placed in
 a `config.toml` file under the key `user_token`. See the example configuration
 file for details.
 
+It is highly recommended to have `ffprobe` installed and to use
+either [beets](https://github.com/beetbox/beets)
+or [Picard](https://picard.musicbrainz.org/) to tag the files. This makes sure
+the artist and title are the same as in the MusicBrainz database and
+writes the MusicBrainz ID (MBID) to the file. `ffprobe` is then used to try to
+find any MBIDs embedded in the metadata, which allows for much more accurate and
+faster matching. It is part of ffmpeg and can be
+installed [here](https://ffmpeg.org/download.html). It is highly recommended
+to use this workflow, since otherwise the program will try to match based
+on the artist and title tags, which may not work or result in the wrong MBID
+being selected for a file.
+
 **Usage:** `listenbrainz_playlist_uploader [OPTIONS] <FILE> <PLAYLIST_NAME>`
 
 ### **Arguments:**
