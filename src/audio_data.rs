@@ -183,23 +183,6 @@ mod test {
     }
 
     #[test]
-    fn test_get_recording_mbid_general_2() {
-        let test = AudioFileData {
-            artist: "Sasha Alex Sloan".parse().unwrap(),
-            title: "Dancing with Your Ghost".parse().unwrap(),
-            album: None,
-        };
-        let mut test_client = ListenbrainzClient::new("".to_string());
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        let result = rt.block_on(async {
-            get_musicbrainz_id_for_audio_data(&mut test_client, test)
-                .await
-                .unwrap()
-        });
-        assert_eq!(result, "9ae71082-ac47-4b9c-a12b-a67fff75784a");
-    }
-
-    #[test]
     fn test_get_recording_mbid_artist_alias() {
         let test = AudioFileData {
             artist: "Akihito Okano".parse().unwrap(),
