@@ -61,7 +61,6 @@ being selected for a file.
 
 ### Things to Do
 
-- Make the song search better so that more songs are matched.
 - Read the Listenbrainz rate limiting dynamically to be more efficient.
 - Add pagination for playlist finding.
 
