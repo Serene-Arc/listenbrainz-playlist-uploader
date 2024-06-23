@@ -24,7 +24,7 @@ to use this workflow, since otherwise the program will try to match based
 on the artist and title tags, which may not work or result in the wrong MBID
 being selected for a file.
 
-**Usage:** `listenbrainz_playlist_uploader [OPTIONS] <FILE> <PLAYLIST_NAME>`
+**Usage:** `listenbrainz-playlist-uploader [OPTIONS] <FILE> <PLAYLIST_NAME>`
 
 ### **Arguments:**
 
