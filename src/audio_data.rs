@@ -148,6 +148,7 @@ pub fn read_mbid_from_metadata(file: &PathBuf) -> Result<String> {
         .ok_or_else(|| anyhow!("Could not read tags"))?
         .extra;
     let keys = vec![
+        "MUSICBRAINZ_RELEASETRACKID",
         "MUSICBRAINZ_TRACKID",
         "MusicBrainz Release Track Id",
         "mb_trackid",
