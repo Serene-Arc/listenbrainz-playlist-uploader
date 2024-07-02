@@ -243,9 +243,9 @@ pub async fn add_items_to_playlist(
 fn match_error_from_playlist_change(response: StatusCode) -> Result<(), Error> {
     match response.as_u16() {
         200 => Ok(()),
-        400 => Err(anyhow!("Request was badly formulated")),
-        401 => Err(anyhow!("Authorisation failed")),
-        403 => Err(anyhow!("Not authorised to delete from this playlist")),
+        400 => Err(anyhow!("Request was badly formulated (400)")),
+        401 => Err(anyhow!("Authorisation failed (401)")),
+        403 => Err(anyhow!("Not authorised to delete from this playlist (403)")),
         error => Err(anyhow!("The request returned error code {}", error)),
     }
 }
