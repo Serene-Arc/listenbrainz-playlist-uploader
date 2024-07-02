@@ -3,6 +3,7 @@ use anyhow::{anyhow, Result};
 use audiotags::Tag;
 use cached::proc_macro::cached;
 use ffprobe::ffprobe;
+use log::debug;
 use musicbrainz_rs::entity::artist::{Artist, ArtistSearchQuery};
 use musicbrainz_rs::Search;
 use serde_json::Value;
@@ -120,8 +121,14 @@ async fn get_artist_mbid(artist_name: String) -> ArtistData {
 }
 
 pub fn load_tags_from_file_path(file: PathBuf) -> Result<AudioIDData> {
-    if let Ok(mbid) = read_mbid_from_metadata(&file) {
-        return Ok(AudioIDData::Mbid(mbid));
+    let result = read_mbid_from_metadata(&file);
+    match result {
+        Ok(mbid) => {
+            return Ok(AudioIDData::Mbid(mbid));
+        }
+        Err(e) => {
+            debug!("Failed to read MBID tag from file {:?}: {}", file, e)
+        }
     }
     let tags = Tag::new().read_from_path(file)?;
     let artist = tags
