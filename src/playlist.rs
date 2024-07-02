@@ -239,7 +239,6 @@ pub async fn add_items_to_playlist(
         public: false,
         song_mbids: track_mbids,
     };
-    debug!("{:?}", serde_json::to_string(&data));
     let response = listenbrainz_client
         .take_request_builder(listenbrainz_client.request_client.post(url).json(&data))
         .await;
