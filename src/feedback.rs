@@ -5,7 +5,9 @@ use anyhow::Result;
 use serde::Deserialize;
 use serde_json::json;
 use std::collections::HashSet;
+use std::str::FromStr;
 use url::Url;
+use uuid::Uuid;
 
 #[derive(Deserialize)]
 struct FeedbackResponse {
@@ -21,7 +23,7 @@ struct FeedbackResponseWrapper {
 
 pub async fn give_song_feedback_for_mbid(
     listenbrainz_client: &mut ListenbrainzClient,
-    mbid: &str,
+    mbid: &Uuid,
     feedback: Feedback,
 ) -> Result<()> {
     let parameters = json!({"recording_mbid": mbid,"score": &(feedback as i8).to_string(),});
@@ -43,7 +45,7 @@ pub async fn get_existing_feedback(
     listenbrainz_client: &mut ListenbrainzClient,
     user_name: &str,
     feedback: Feedback,
-) -> Result<HashSet<String>> {
+) -> Result<HashSet<Uuid>> {
     let mut all_feedback = HashSet::new();
     for url in ListenbrainzPaginator::new(
         &format!("https://api.listenbrainz.org/1/feedback/user/{user_name}/get-feedback"),
@@ -66,7 +68,9 @@ pub async fn get_existing_feedback(
             feedback_response
                 .feedback
                 .into_iter()
-                .filter_map(|f| f.recording_mbid),
+                .filter_map(|f| f.recording_mbid)
+                .map(|m| Uuid::from_str(m.as_str()))
+                .filter_map(|f| f.ok()),
         )
     }
     Ok(all_feedback)

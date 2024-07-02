@@ -5,16 +5,18 @@ use reqwest::StatusCode;
 use serde::{Deserialize, Serialize, Serializer};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
+use std::str::FromStr;
 use url::Url;
+use uuid::Uuid;
 
 #[derive(Deserialize)]
 pub struct PlaylistSubmissionResponse {
-    pub playlist_mbid: String,
+    pub playlist_mbid: Uuid,
 }
 
 struct SubmissionPlaylist<'a> {
     name: String,
-    song_mbids: &'a [String],
+    song_mbids: &'a [Uuid],
     public: bool,
 }
 
@@ -26,11 +28,11 @@ struct ValidationResponse {
 
 pub struct SimpleExistingPlaylistResponse {
     pub title: String,
-    pub identifier: String,
+    pub identifier: Uuid,
 }
 
 pub struct FullExistingPlaylistResponse {
-    pub identifier: String,
+    pub identifier: Uuid,
     pub number_of_tracks: usize,
 }
 
@@ -45,12 +47,14 @@ impl SimpleExistingPlaylistResponse {
                 let title = playlist_data["playlist"]["title"].as_str().unwrap();
                 playlists.push(SimpleExistingPlaylistResponse {
                     title: title.to_string(),
-                    identifier: (*identifier
-                        .rsplit('/')
-                        .collect::<Vec<&str>>()
-                        .first()
-                        .unwrap())
-                    .to_string(),
+                    identifier: Uuid::from_str(
+                        identifier
+                            .rsplit('/')
+                            .collect::<Vec<&str>>()
+                            .first()
+                            .unwrap(),
+                    )
+                    .expect("Could not convert to valid UUID"),
                 });
             }
         }
@@ -65,12 +69,14 @@ impl FullExistingPlaylistResponse {
         let identifier = data["playlist"]["identifier"].as_str().unwrap();
         let number_of_tracks = data["playlist"]["track"].as_array().unwrap().len();
         Ok(FullExistingPlaylistResponse {
-            identifier: (*identifier
-                .rsplit('/')
-                .collect::<Vec<&str>>()
-                .first()
-                .unwrap())
-            .to_string(),
+            identifier: Uuid::from_str(
+                identifier
+                    .rsplit('/')
+                    .collect::<Vec<&str>>()
+                    .first()
+                    .unwrap(),
+            )
+            .expect("Could not convert to valid UUID"),
             number_of_tracks,
         })
     }
@@ -96,7 +102,7 @@ impl Serialize for SubmissionPlaylist<'_> {
             .iter()
             .map(|mbid| {
                 let mut song_map = Map::new();
-                let mut mbid_url = mbid.clone();
+                let mut mbid_url = mbid.clone().to_string();
                 mbid_url.insert_str(0, "https://musicbrainz.org/recording/");
                 song_map.insert("identifier".to_string(), Value::String(mbid_url));
                 Value::Object(song_map)
@@ -122,7 +128,7 @@ impl Serialize for SubmissionPlaylist<'_> {
 
 pub async fn submit_playlist(
     listenbrainz_client: &mut ListenbrainzClient,
-    mbid_vec: &Vec<String>,
+    mbid_vec: &Vec<Uuid>,
     playlist_name: String,
     public_playlist: bool,
 ) -> Result<PlaylistSubmissionResponse> {
@@ -177,7 +183,7 @@ pub async fn get_current_playlists(
 
 async fn get_full_specific_playlist(
     listenbrainz_client: &mut ListenbrainzClient,
-    playlist_id: &String,
+    playlist_id: &Uuid,
 ) -> Result<FullExistingPlaylistResponse> {
     let url = Url::parse(&format!(
         "https://api.listenbrainz.org/1/playlist/{playlist_id}"
@@ -192,7 +198,7 @@ async fn get_full_specific_playlist(
 
 pub async fn delete_items_from_playlist(
     listenbrainz_client: &mut ListenbrainzClient,
-    playlist_id: &String,
+    playlist_id: &Uuid,
     start_index: usize,
     count_to_remove: usize,
 ) -> Result<()> {
@@ -210,8 +216,8 @@ pub async fn delete_items_from_playlist(
 
 pub async fn mass_add_to_playlist(
     listenbrainz_client: &mut ListenbrainzClient,
-    playlist_id: &String,
-    track_mbids: &[String],
+    playlist_id: &Uuid,
+    track_mbids: &[Uuid],
 ) -> Result<()> {
     for chunk in track_mbids.chunks(100) {
         add_items_to_playlist(listenbrainz_client, playlist_id, chunk).await?;
@@ -221,8 +227,8 @@ pub async fn mass_add_to_playlist(
 
 pub async fn add_items_to_playlist(
     listenbrainz_client: &mut ListenbrainzClient,
-    playlist_id: &String,
-    track_mbids: &[String],
+    playlist_id: &Uuid,
+    track_mbids: &[Uuid],
 ) -> Result<()> {
     let url = Url::parse(&format!(
         "https://api.listenbrainz.org/1/playlist/{playlist_id}/item/add/0",
@@ -233,6 +239,7 @@ pub async fn add_items_to_playlist(
         public: false,
         song_mbids: track_mbids,
     };
+    debug!("{:?}", serde_json::to_string(&data));
     let response = listenbrainz_client
         .take_request_builder(listenbrainz_client.request_client.post(url).json(&data))
         .await;
@@ -291,7 +298,7 @@ mod test {
     fn test_serialise_playlist_one_track() {
         let test = SubmissionPlaylist {
             name: "Example".to_string(),
-            song_mbids: &vec!["test".to_string()],
+            song_mbids: &vec![Uuid::from_str("36855a5c-abcb-4740-9154-361af8c11ee1").unwrap()],
             public: false,
         };
         assert_ser_tokens(
@@ -314,7 +321,9 @@ mod test {
                 Token::Seq { len: Some(1) },
                 Token::Map { len: Some(1) },
                 Token::String("identifier"),
-                Token::String("https://musicbrainz.org/recording/test"),
+                Token::String(
+                    "https://musicbrainz.org/recording/36855a5c-abcb-4740-9154-361af8c11ee1",
+                ),
                 Token::MapEnd,
                 Token::SeqEnd,
                 Token::MapEnd,
@@ -327,7 +336,10 @@ mod test {
     fn test_serialise_playlist_two_tracks() {
         let test = SubmissionPlaylist {
             name: "Example".to_string(),
-            song_mbids: &vec!["test1".to_string(), "test2".to_string()],
+            song_mbids: &vec![
+                Uuid::from_str("36855a5c-abcb-4740-9154-361af8c11ee1").unwrap(),
+                Uuid::from_str("00066722-b23a-48e5-82e4-0470c82a2705").unwrap(),
+            ],
             public: false,
         };
         assert_ser_tokens(
@@ -350,11 +362,15 @@ mod test {
                 Token::Seq { len: Some(2) },
                 Token::Map { len: Some(1) },
                 Token::String("identifier"),
-                Token::String("https://musicbrainz.org/recording/test1"),
+                Token::String(
+                    "https://musicbrainz.org/recording/36855a5c-abcb-4740-9154-361af8c11ee1",
+                ),
                 Token::MapEnd,
                 Token::Map { len: Some(1) },
                 Token::String("identifier"),
-                Token::String("https://musicbrainz.org/recording/test2"),
+                Token::String(
+                    "https://musicbrainz.org/recording/00066722-b23a-48e5-82e4-0470c82a2705",
+                ),
                 Token::MapEnd,
                 Token::SeqEnd,
                 Token::MapEnd,

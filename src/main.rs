@@ -26,6 +26,7 @@ use std::path::PathBuf;
 use std::process::exit;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use uuid::Uuid;
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -295,7 +296,7 @@ async fn main() {
 async fn submit_new_playlist(
     listenbrainz_client: &mut ListenbrainzClient,
     public: bool,
-    musicbrainz_ids: &Vec<String>,
+    musicbrainz_ids: &Vec<Uuid>,
     playlist_name: String,
 ) {
     debug!("Submitting new playlist");
@@ -313,7 +314,7 @@ async fn submit_new_playlist(
 
 async fn give_feedback_on_all_songs(
     listenbrainz_client: &mut ListenbrainzClient,
-    musicbrainz_ids: Vec<&String>,
+    musicbrainz_ids: Vec<&Uuid>,
     feedback: Feedback,
 ) {
     let progress_bar = make_progress_bar(musicbrainz_ids.len());
@@ -350,7 +351,7 @@ async fn give_feedback_on_all_songs(
 async fn resolve_all_songs_for_mbids(
     listenbrainz_client: &mut ListenbrainzClient,
     song_data: Vec<AudioIDData>,
-) -> Vec<String> {
+) -> Vec<Uuid> {
     let progress_bar = make_progress_bar(song_data.len());
     let listenbrainz_client = Arc::new(Mutex::new(listenbrainz_client));
     let futures: FuturesUnordered<_> = song_data
@@ -376,7 +377,7 @@ async fn resolve_all_songs_for_mbids(
         })
         .collect();
 
-    let musicbrainz_ids: Vec<Result<String>> = futures.collect().await;
+    let musicbrainz_ids: Vec<Result<Uuid>> = futures.collect().await;
 
     musicbrainz_ids
         .into_iter()

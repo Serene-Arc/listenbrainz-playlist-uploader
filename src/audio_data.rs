@@ -7,7 +7,9 @@ use musicbrainz_rs::entity::artist::{Artist, ArtistSearchQuery};
 use musicbrainz_rs::Search;
 use serde_json::Value;
 use std::path::PathBuf;
+use std::str::FromStr;
 use url::Url;
+use uuid::Uuid;
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct AudioFileData {
@@ -18,20 +20,20 @@ pub struct AudioFileData {
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum AudioIDData {
-    Mbid(String),
+    Mbid(Uuid),
     AudioFileData(AudioFileData),
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct ArtistData {
     pub artist_tag: String,
-    pub mbid: Option<String>,
+    pub mbid: Option<Uuid>,
 }
 
 pub async fn get_musicbrainz_id_for_audio_data(
     listenbrainz_client: &mut ListenbrainzClient,
     audio_file_data: AudioFileData,
-) -> Result<String> {
+) -> Result<Uuid> {
     let mut result = make_listenbrainz_lookup_request(
         listenbrainz_client,
         &audio_file_data.title,
@@ -59,7 +61,8 @@ pub async fn get_musicbrainz_id_for_audio_data(
         .ok_or_else(|| anyhow::anyhow!("Could not extract recording MBID from JSON: {:?}", result))?
         .as_str()
         .ok_or_else(|| anyhow!("Could not convert to string"))?;
-    Ok(out.to_string())
+    let mbid = Uuid::from_str(out)?;
+    Ok(mbid)
 }
 
 async fn make_listenbrainz_lookup_request(
@@ -112,7 +115,7 @@ async fn get_artist_mbid(artist_name: String) -> ArtistData {
     let artist = result.entities.first().unwrap();
     ArtistData {
         artist_tag: artist.name.clone(),
-        mbid: Some(artist.id.clone()),
+        mbid: Some(Uuid::from_str(artist.id.as_str()).expect("Could not convert to valid UUID")),
     }
 }
 
@@ -141,22 +144,19 @@ pub fn load_tags_from_file_path(file: PathBuf) -> Result<AudioIDData> {
     }))
 }
 
-pub fn read_mbid_from_metadata(file: &PathBuf) -> Result<String> {
+pub fn read_mbid_from_metadata(file: &PathBuf) -> Result<Uuid> {
     let extra = ffprobe(file)?
         .format
         .tags
         .ok_or_else(|| anyhow!("Could not read tags"))?
         .extra;
-    let keys = vec![
-        "MUSICBRAINZ_RELEASETRACKID",
-        "MUSICBRAINZ_TRACKID",
-        "MusicBrainz Release Track Id",
-        "mb_trackid",
-    ];
+    let keys = vec!["MUSICBRAINZ_TRACKID", "mb_trackid"];
 
     for key in keys {
         if let Some(mbid) = extra.get(key) {
-            return Ok(mbid.to_string());
+            let mbid = mbid.as_str().expect("MBID was somehow not a string");
+            let mbid = Uuid::from_str(mbid)?;
+            return Ok(mbid);
         }
     }
     Err(anyhow!("Could not find MBID in tags"))
@@ -179,7 +179,7 @@ mod test {
                 .await
                 .unwrap()
         });
-        assert_eq!(result, "b84dd2d1-2bf1-4fcc-aadc-6cc39c36ba35");
+        assert_eq!(result.to_string(), "b84dd2d1-2bf1-4fcc-aadc-6cc39c36ba35");
     }
 
     #[test]
@@ -196,7 +196,7 @@ mod test {
                 .await
                 .unwrap()
         });
-        assert_eq!(result, "5d93f99e-6663-4e77-97f1-0835f6b96b00");
+        assert_eq!(result.to_string(), "5d93f99e-6663-4e77-97f1-0835f6b96b00");
     }
 
     #[test]
@@ -213,7 +213,7 @@ mod test {
                 .await
                 .unwrap()
         });
-        assert_eq!(result, "764f4c40-1c16-44a7-a6e6-b8c426604b57");
+        assert_eq!(result.to_string(), "764f4c40-1c16-44a7-a6e6-b8c426604b57");
     }
 
     #[test]
@@ -230,7 +230,7 @@ mod test {
                 .await
                 .unwrap()
         });
-        assert_eq!(result, "589b2eff-e541-475b-bbe7-ca778238e711");
+        assert_eq!(result.to_string(), "589b2eff-e541-475b-bbe7-ca778238e711");
     }
 
     #[test]
@@ -247,7 +247,7 @@ mod test {
                 .await
                 .unwrap()
         });
-        assert_eq!(result, "4f8268ae-8db1-42a7-baca-b1a0b0b879c4");
+        assert_eq!(result.to_string(), "4f8268ae-8db1-42a7-baca-b1a0b0b879c4");
     }
 
     #[test]
@@ -264,7 +264,7 @@ mod test {
                 .await
                 .unwrap()
         });
-        assert_eq!(result, "9ae71082-ac47-4b9c-a12b-a67fff75784a");
+        assert_eq!(result.to_string(), "9ae71082-ac47-4b9c-a12b-a67fff75784a");
     }
 
     #[test]
@@ -289,7 +289,10 @@ mod test {
         let test = "Ed Sheeran".to_string();
         let rt = tokio::runtime::Runtime::new().unwrap();
         let result = rt.block_on(async { get_artist_mbid(test).await });
-        assert_eq!(result.mbid.unwrap(), "b8a7c51f-362c-4dcb-a259-bc6e0095f0a6");
+        assert_eq!(
+            result.mbid.unwrap().to_string(),
+            "b8a7c51f-362c-4dcb-a259-bc6e0095f0a6"
+        );
     }
 
     #[test]
@@ -297,6 +300,9 @@ mod test {
         let test = "Akihito Okano".to_string();
         let rt = tokio::runtime::Runtime::new().unwrap();
         let result = rt.block_on(async { get_artist_mbid(test).await });
-        assert_eq!(result.mbid.unwrap(), "0f51ab24-c89a-438e-b3af-2d974fa0654a");
+        assert_eq!(
+            result.mbid.unwrap().to_string(),
+            "0f51ab24-c89a-438e-b3af-2d974fa0654a"
+        );
     }
 }
