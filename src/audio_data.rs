@@ -2,7 +2,7 @@ use crate::listenbrainz_client::ListenbrainzClient;
 use anyhow::{anyhow, Result};
 use audiotags::Tag;
 use cached::proc_macro::cached;
-use ffprobe::ffprobe;
+use lofty::{file::TaggedFileExt, tag::ItemKey};
 use log::debug;
 use musicbrainz_rs::entity::artist::{Artist, ArtistSearchQuery};
 use musicbrainz_rs::Search;
@@ -152,20 +152,17 @@ pub fn load_tags_from_file_path(file: PathBuf) -> Result<AudioIDData> {
 }
 
 pub fn read_mbid_from_metadata(file: &PathBuf) -> Result<Uuid> {
-    let extra = ffprobe(file)?
-        .format
-        .tags
-        .ok_or_else(|| anyhow!("Could not read tags"))?
-        .extra;
-    let keys = vec!["MUSICBRAINZ_TRACKID", "mb_trackid"];
+    let file = lofty::read_from_path(file)?;
 
-    for key in keys {
-        if let Some(mbid) = extra.get(key) {
-            let mbid = mbid.as_str().expect("MBID was somehow not a string");
+    if let Some(tags) = file.primary_tag() {
+        let mb_recording_id = tags.get_string(&ItemKey::MusicBrainzRecordingId);
+
+        if let Some(mbid) = mb_recording_id {
             let mbid = Uuid::from_str(mbid)?;
             return Ok(mbid);
         }
     }
+
     Err(anyhow!("Could not find MBID in tags"))
 }
 
